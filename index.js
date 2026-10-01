@@ -1,13 +1,18 @@
 const express = require("express");
 
+const pdfRouter = require("./src/routes/pdf");
+
 const app = express();
 
 const PORT = process.env.PORT || 3000;
 
-// Allow our API to receive JSON
+// JSON requests
 app.use(express.json());
 
-// Home route
+// API routes
+app.use("/v1/pdf", pdfRouter);
+
+// Home
 app.get("/", (req, res) => {
   res.json({
     name: "DevTools API",
@@ -26,6 +31,6 @@ app.get("/health", (req, res) => {
 });
 
 // Start server
-app.listen(PORT, () => {
+app.listen(PORT, "0.0.0.0", () => {
   console.log(`DevTools API running on port ${PORT}`);
 });
