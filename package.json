@@ -1,0 +1,14 @@
+{
+  "name": "devtools-api",
+  "version": "1.0.0",
+  "description": "Developer API platform",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "multer": "^2.0.2",
+    "pdf-parse": "^1.1.1"
+  }
+}
