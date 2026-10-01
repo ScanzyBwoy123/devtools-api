@@ -141,7 +141,7 @@
         status.textContent =
           `Success! ${data.pages} page(s) extracted.`;
 
-        result.textContent = data.text || "No text found in this PDF.";
+       result.textContent = JSON.stringify(data, null, 2); 
 
       } catch (error) {
 
