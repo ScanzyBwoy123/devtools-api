@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>DevTools API - PDF Tester</title>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 20px;
+      background: #f5f7fa;
+    }
+
+    h1 {
+      color: #111827;
+    }
+
+    .box {
+      background: white;
+      padding: 25px;
+      border-radius: 12px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+    }
+
+    input {
+      margin: 15px 0;
+    }
+
+    button {
+      padding: 12px 20px;
+      border: none;
+      border-radius: 8px;
+      background: #2563eb;
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      background: #9ca3af;
+    }
+
+    #status {
+      margin-top: 20px;
+      font-weight: bold;
+    }
+
+    #result {
+      margin-top: 20px;
+      padding: 15px;
+      background: #111827;
+      color: #e5e7eb;
+      border-radius: 8px;
+      white-space: pre-wrap;
+      overflow-x: auto;
+      min-height: 100px;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="box">
+
+    <h1>DevTools API</h1>
+
+    <h2>PDF Text Extractor</h2>
+
+    <p>
+      Select a PDF file and extract its text using the DevTools API.
+    </p>
+
+    <input
+      type="file"
+      id="pdfFile"
+      accept="application/pdf"
+    >
+
+    <br>
+
+    <button id="extractBtn">
+      Extract PDF Text
+    </button>
+
+    <div id="status"></div>
+
+    <div id="result">
+      Extracted text will appear here...
+    </div>
+
+  </div>
+
+  <script>
+    const fileInput = document.getElementById("pdfFile");
+    const extractBtn = document.getElementById("extractBtn");
+    const status = document.getElementById("status");
+    const result = document.getElementById("result");
+
+    extractBtn.addEventListener("click", async () => {
+
+      const file = fileInput.files[0];
+
+      if (!file) {
+        status.textContent = "Please select a PDF file.";
+        return;
+      }
+
+      if (file.type !== "application/pdf") {
+        status.textContent = "Please select a PDF file.";
+        return;
+      }
+
+      const formData = new FormData();
+
+      formData.append("file", file);
+
+      extractBtn.disabled = true;
+
+      status.textContent = "Extracting PDF...";
+      result.textContent = "";
+
+      try {
+
+        const response = await fetch("/v1/pdf/extract", {
+          method: "POST",
+          body: formData
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          status.textContent = "Extraction failed.";
+          result.textContent = JSON.stringify(data, null, 2);
+          return;
+        }
+
+        status.textContent =
+          `Success! ${data.pages} page(s) extracted.`;
+
+        result.textContent = data.text || "No text found in this PDF.";
+
+      } catch (error) {
+
+        status.textContent = "Connection error.";
+
+        result.textContent = error.message;
+
+      } finally {
+
+        extractBtn.disabled = false;
+
+      }
+
+    });
+  </script>
+
+</body>
+</html>
