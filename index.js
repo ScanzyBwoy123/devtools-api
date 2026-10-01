@@ -9,6 +9,9 @@ const PORT = process.env.PORT || 3000;
 // JSON requests
 app.use(express.json());
 
+// Serve test pages
+app.use(express.static("public"));
+
 // API routes
 app.use("/v1/pdf", pdfRouter);
 
