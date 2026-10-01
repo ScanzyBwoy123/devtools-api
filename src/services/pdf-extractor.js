@@ -5,12 +5,21 @@ async function extractTextFromPdf(buffer) {
     throw new Error("Invalid PDF data.");
   }
 
-  const data = await pdfParse(buffer);
+  try {
+    const data = await pdfParse(buffer);
 
-  return {
-    text: data.text,
-    pages: data.numpages
-  };
+    return {
+      text: data.text || "",
+      pages: data.numpages || 0
+    };
+
+  } catch (error) {
+    console.error("PDF parser error:", error);
+
+    throw new Error(
+      `PDF parser failed: ${error.message}`
+    );
+  }
 }
 
 module.exports = {
