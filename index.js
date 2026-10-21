@@ -1,4 +1,4 @@
-const express = require(“express”);
+const express = require("express");
 const pdfRouter = require(”./src/routes/pdf”);
 
 const app = express();
@@ -168,5 +168,5 @@ status >= 400 && status < 500
 
 // Start server
 app.listen(PORT, “0.0.0.0”, () => {
-console.log(DevTools API running on port ${PORT});
+console.log(`DevTools API running on port ${PORT}`);
 });
