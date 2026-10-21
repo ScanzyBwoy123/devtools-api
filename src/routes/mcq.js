@@ -3,9 +3,9 @@ const express = require("express");
 const router = express.Router();
 
 // Generate multiple-choice questions
-router.post(”/generate”, async (req, res) => {
+router.post("/generate", async (req, res) => {
 try {
-const { topic, notes, count = 10, difficulty = “medium” } =
+const { topic, notes, count = 10, difficulty = "medium" } =
 req.body || {};
 
 if (
@@ -53,7 +53,7 @@ return res.status(501).json({
 });
 
 } catch (error) {
-console.error(“MCQ generation error:”, error);
+console.error("MCQ generation error:", error);
 
 return res.status(500).json({
   success: false,
