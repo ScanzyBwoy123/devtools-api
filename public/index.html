@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DevTools API | MCQ Generator</title>
+  <style>
+    * { box-sizing: border-box; }
+body {
+  margin: 0;
+  padding: 20px;
+  font-family: Arial, sans-serif;
+  background: #f3f6fb;
+  color: #172033;
+}
+.container {
+  max-width: 700px;
+  margin: 20px auto;
+  background: white;
+  padding: 24px;
+  border-radius: 16px;
+  box-shadow: 0 5px 25px rgba(0,0,0,0.07);
+}
+h1 { margin-top: 0; color: #2457d6; }
+p { line-height: 1.6; }
+label {
+  display: block;
+  margin-top: 18px;
+  margin-bottom: 7px;
+  font-weight: bold;
+}
+input, textarea, select, button {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+  font-size: 16px;
+}
+textarea {
+  min-height: 150px;
+  resize: vertical;
+}
+button {
+  margin-top: 20px;
+  border: none;
+  background: #2457d6;
+  color: white;
+  font-weight: bold;
+  cursor: pointer;
+}
+button:disabled {
+  background: #8797bb;
+  cursor: wait;
+}
+#status {
+  margin-top: 18px;
+  padding: 12px;
+  border-radius: 8px;
+  background: #eef2ff;
+  overflow-wrap: anywhere;
+}
+.question {
+  margin-top: 18px;
+  padding: 16px;
+  border: 1px solid #dbe3ef;
+  border-radius: 10px;
+}
+.option { margin: 8px 0; }
+.answer {
+  margin-top: 12px;
+  padding: 10px;
+  background: #ecfdf5;
+  border-radius: 8px;
+}
+.small {
+  font-size: 13px;
+  color: #64748b;
+}
+  </style>
+</head>
+<body>
+  <main class="container">
+    <h1>DevTools API</h1>
+    <h2>MCQ Generator</h2>
+<p>Generate multiple-choice practice questions from your topic or study notes.</p>
+<p id="connection">Checking API connection...</p>
+<form id="mcqForm">
+  <label for="topic">Topic</label>
+  <input
+    id="topic"
+    type="text"
+    placeholder="e.g. Respiratory Nursing"
+    required
+  >
+  <label for="notes">Study notes (optional)</label>
+  <textarea
+    id="notes"
+    placeholder="Paste your lecture notes here..."
+  ></textarea>
+  <label for="count">Number of questions</label>
+  <select id="count">
+    <option value="5">5 questions</option>
+    <option value="10" selected>10 questions</option>
+    <option value="15">15 questions</option>
+    <option value="20">20 questions</option>
+  </select>
+  <label for="difficulty">Difficulty</label>
+  <select id="difficulty">
+    <option value="easy">Easy</option>
+    <option value="medium" selected>Medium</option>
+    <option value="hard">Hard</option>
+  </select>
+  <button id="generateButton" type="submit">
+    Generate Questions
+  </button>
+</form>
+<div id="status" role="status" aria-live="polite">
+  Ready to generate questions.
+</div>
+<section id="results"></section>
+  </main>
+  <script>
+    const API_BASE =
+      "https://dchmgbhywyvprnhcjuma.supabase.co/functions/v1/devtools-api";
+    const connection = document.getElementById("connection");
+    const form = document.getElementById("mcqForm");
+    const button = document.getElementById("generateButton");
+    const statusBox = document.getElementById("status");
+    const results = document.getElementById("results");
+    async function checkConnection() {
+      try {
+        const response = await fetch(API_BASE + "/health");
+        if (!response.ok) {
+          throw new Error("Health check returned HTTP " + response.status);
+        }
+        const data = await response.json();
+        connection.textContent =
+          data.status === "healthy"
+            ? "🟢 API connected"
+            : "🟠 API responded, but status is unexpected.";
+      } catch (error) {
+        connection.textContent =
+          "🔴 Connection check failed. Check your internet connection and API URL.";
+      }
+    }
+    function addText(parent, tag, content) {
+      const element = document.createElement(tag);
+      element.textContent = content;
+      parent.appendChild(element);
+      return element;
+    }
+    function displayQuestions(data) {
+      results.replaceChildren();
+      const questions = data.questions;
+      if (!Array.isArray(questions) || questions.length === 0) {
+        throw new Error("The API returned no questions. Please try again.");
+      }
+      addText(results, "h2", "Generated Questions");
+      questions.forEach((question, index) => {
+        const card = document.createElement("article");
+        card.className = "question";
+        addText(
+          card,
+          "h3",
+          "Question " + (index + 1) + ": " + question.question
+        );
+        const options = question.options || {};
+        ["A", "B", "C", "D"].forEach(letter => {
+          if (options[letter] !== undefined) {
+            addText(
+              card,
+              "p",
+              letter + ". " + options[letter]
+            ).className = "option";
+          }
+        });
+        const answer = document.createElement("div");
+        answer.className = "answer";
+        const correctLetter = question.correct_answer;
+        const correctText = options[correctLetter] || "";
+        addText(
+          answer,
+          "strong",
+          "Correct answer: " + correctLetter +
+          (correctText ? ". " + correctText : "")
+        );
+        if (question.explanation) {
+          addText(
+            answer,
+            "p",
+            "Explanation: " + question.explanation
+          );
+        }
+        card.appendChild(answer);
+        results.appendChild(card);
+      });
+    }
+    form.addEventListener("submit", async function(event) {
+      event.preventDefault();
+      const topic = document.getElementById("topic").value.trim();
+      const notes = document.getElementById("notes").value.trim();
+      const count = Number(document.getElementById("count").value);
+      const difficulty = document.getElementById("difficulty").value;
+      if (!topic) {
+        statusBox.textContent = "Please enter a topic.";
+        return;
+      }
+      button.disabled = true;
+      button.textContent = "Generating...";
+      statusBox.textContent = "Please wait. Generating your questions...";
+      results.replaceChildren();
+      try {
+        const response = await fetch(API_BASE + "/questions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            topic: topic,
+            notes: notes,
+            count: count,
+            difficulty: difficulty
+          })
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          const message =
+            data.error?.message ||
+            data.message ||
+            "The API returned HTTP " + response.status;
+          throw new Error(message);
+        }
+        if (data.success === false) {
+          throw new Error(
+            data.error?.message || "The API could not generate questions."
+          );
+        }
+        displayQuestions(data);
+        statusBox.textContent =
+          "✅ Successfully generated " +
+          data.questions.length +
+          " question(s).";
+      } catch (error) {
+        statusBox.textContent =
+          "❌ " + error.message +
+          " If this continues, check the API endpoint and connection.";
+      } finally {
+        button.disabled = false;
+        button.textContent = "Generate Questions";
+      }
+    });
+    checkConnection();
+  </script>
+</body>
+</html>
