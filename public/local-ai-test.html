@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DevTools AI — Local Model Test</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 20px;
+      background: #0b1020;
+      color: #f1f5f9;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    main {
+      max-width: 760px;
+      margin: 0 auto;
+    }
+
+    .card {
+      padding: 20px;
+      margin-bottom: 18px;
+      background: #151d31;
+      border: 1px solid #29354d;
+      border-radius: 16px;
+    }
+
+    h1 {
+      margin-top: 0;
+      font-size: 27px;
+    }
+
+    .subtitle, .note {
+      color: #aab8d0;
+      line-height: 1.6;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 130px;
+      padding: 14px;
+      color: #f1f5f9;
+      background: #0b1020;
+      border: 1px solid #42516c;
+      border-radius: 10px;
+      font: inherit;
+      font-size: 16px;
+      resize: vertical;
+    }
+
+    button {
+      width: 100%;
+      min-height: 48px;
+      margin-top: 12px;
+      padding: 12px;
+      border: 0;
+      border-radius: 10px;
+      background: #38bdf8;
+      color: #082032;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    #status {
+      margin-top: 14px;
+      padding: 12px;
+      border-radius: 8px;
+      background: #0b1020;
+      color: #bae6fd;
+      overflow-wrap: anywhere;
+      line-height: 1.5;
+    }
+
+    #answer {
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      line-height: 1.7;
+    }
+
+    .label {
+      color: #7dd3fc;
+      font-weight: 700;
+    }
+  </style>
+</head>
+
+<body>
+<main>
+  <section class="card">
+    <h1>⚡ DevTools AI</h1>
+    <p class="subtitle">
+      Our first experiment: run a small language model in the browser
+      instead of calling a paid AI inference API.
+    </p>
+
+    <p class="note">
+      Model: SmolLM2 135M Instruct. The browser library and model
+      files must be downloaded first. Performance depends on your
+      iPhone, browser memory and available storage.
+    </p>
+
+    <button id="loadBtn">1. Load Local AI Model</button>
+    <div id="status" role="status" aria-live="polite">
+      Model not loaded. Tap the button to begin.
+    </div>
+  </section>
+
+  <section class="card">
+    <label class="label" for="prompt">Your prompt</label>
+    <textarea id="prompt"
+      placeholder="Example: Explain photosynthesis in simple terms."></textarea>
+
+    <button id="askBtn" disabled>2. Ask DevTools AI</button>
+  </section>
+
+  <section class="card">
+    <h2>AI Response</h2>
+    <div id="answer">Your response will appear here.</div>
+  </section>
+
+  <section class="card">
+    <h3>Privacy and limitations</h3>
+    <p class="note">
+      After the model is downloaded, text generation is intended to run
+      locally in your browser. This page does not deliberately send your
+      prompt to an AI inference API. The library and model are downloaded
+      from external hosting, and browser caching is not guaranteed.
+      This is an experiment, not a production API.
+    </p>
+  </section>
+</main>
+
+<script type="module">
+  const loadBtn = document.getElementById("loadBtn");
+  const askBtn = document.getElementById("askBtn");
+  const statusBox = document.getElementById("status");
+  const promptBox = document.getElementById("prompt");
+  const answerBox = document.getElementById("answer");
+
+  let generator = null;
+  let busy = false;
+
+  function setStatus(message) {
+    statusBox.textContent = message;
+  }
+
+  loadBtn.addEventListener("click", async () => {
+    if (busy || generator) return;
+
+    busy = true;
+    loadBtn.disabled = true;
+    setStatus("Loading the browser library and model. This may take time and use mobile data...");
+
+    try {
+      const { pipeline, env } = await import(
+        "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.2"
+      );
+
+      // Use browser execution; do not use a remote inference service.
+      env.allowRemoteModels = true;
+      env.allowLocalModels = false;
+      env.useBrowserCache = true;
+
+      generator = await pipeline(
+        "text-generation",
+        "HuggingFaceTB/SmolLM2-135M-Instruct",
+        {
+          device: "wasm",
+          progress_callback: (progress) => {
+            if (progress.status === "progress") {
+              const percent = Number.isFinite(progress.progress)
+                ? Math.round(progress.progress)
+                : null;
+
+              setStatus(
+                "Downloading model files..." +
+                (percent === null ? "" : " " + percent + "%")
+              );
+            } else if (progress.status) {
+              setStatus("Model status: " + progress.status);
+            }
+          }
+        }
+      );
+
+      setStatus("Model loaded. You can now ask a question.");
+      askBtn.disabled = false;
+      loadBtn.textContent = "Model Loaded";
+    } catch (error) {
+      console.error(error);
+      setStatus(
+        "Model loading failed: " +
+        (error?.message || String(error)) +
+        " Try reloading the page and checking your internet connection."
+      );
+      loadBtn.disabled = false;
+    } finally {
+      busy = false;
+    }
+  });
+
+  askBtn.addEventListener("click", async () => {
+    const prompt = promptBox.value.trim();
+
+    if (!generator || busy || !prompt) {
+      if (!prompt) setStatus("Enter a question first.");
+      return;
+    }
+
+    busy = true;
+    askBtn.disabled = true;
+    answerBox.textContent = "Generating response...";
+
+    try {
+      const result = await generator(
+        [
+          {
+            role: "system",
+            content: "You are DevTools AI, a helpful assistant. Answer clearly and accurately."
+          },
+          {
+            role: "user",
+            content: prompt
+          }
+        ],
+        {
+          max_new_tokens: 180,
+          temperature: 0.7,
+          do_sample: true
+        }
+      );
+
+      const response = result?.[0]?.generated_text;
+      let answer = "";
+
+      if (Array.isArray(response)) {
+        answer = response
+          .filter(item => item.role === "assistant")
+          .map(item => item.content)
+          .join("\n");
+      } else if (typeof response === "string") {
+        answer = response;
+      }
+
+      answerBox.textContent = answer || "The model returned no readable text.";
+      setStatus("Response generated in the browser.");
+    } catch (error) {
+      console.error(error);
+      answerBox.textContent = "Generation failed. Try a shorter prompt.";
+      setStatus("Generation error: " + (error?.message || String(error)));
+    } finally {
+      busy = false;
+      askBtn.disabled = false;
+    }
+  });
+</script>
+</body>
+</html>
