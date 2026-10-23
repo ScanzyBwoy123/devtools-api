@@ -131,6 +131,7 @@ app.get("/v1/capabilities", (req, res) => {
 // Preserve existing PDF routes
 app.use("/v1/pdf", pdfRouter);
 app.use("/v1/mcq", mcqRouter);
+app.use("/v1/research", researchRouter);
 // Handle unknown routes
 app.use((req, res) => {
   res.status(404).json({
