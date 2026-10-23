@@ -119,7 +119,27 @@ function isUsableAnswer(answer) {
 
   return true;
 }
+function isUsableEntity(entity) {
+const value = cleanText(entity);
 
+if (!isUsableAnswer(value)) {
+return false;
+}
+
+if (/^(because|although|however|therefore|other|another|this|that|these|those|it|they|he|she|we|you|also|during|after|before|when|while|which|who|such)\b/i.test(value)) {
+return false;
+}
+
+if (/(\s*[,)]|(\s*)|,\s*)/.test(value)) {
+return false;
+}
+
+if (/[,;:]$/.test(value)) {
+return false;
+}
+
+return true;
+}
 // Extract straightforward facts from complete sentences.
 function extractFact(sentence) {
   let match;
@@ -355,18 +375,34 @@ function makeOptions(answer, candidates) {
 }
 
 function makeDirectQuestion(fact, facts, candidates) {
+  if (
+    !fact ||
+    !isUsableEntity(fact.entity) ||
+    !isUsableAnswer(fact.answer)
+  ) {
+    return null;
+  }
+
   const relatedFacts = facts.filter(item =>
     item.type === fact.type &&
     normalize(item.entity) !== normalize(fact.entity) &&
-    normalize(item.answer) !== normalize(fact.answer)
+    normalize(item.answer) !== normalize(fact.answer) &&
+    isUsableEntity(item.entity) &&
+    isUsableAnswer(item.answer)
   );
 
-  const alternatives = relatedFacts.map(item => item.answer);
-
-  const options = makeOptions(
-    fact.answer,
-    [...alternatives, ...candidates]
+  const alternatives = uniqueCandidates(
+    relatedFacts.map(item => item.answer)
+  ).filter(answer =>
+    normalize(answer) !== normalize(fact.answer)
   );
+
+  // Avoid generating a question without three distinct distractors.
+  if (alternatives.length < 3) {
+    return null;
+  }
+
+  const options = makeOptions(fact.answer, alternatives);
 
   if (!options) {
     return null;
@@ -391,7 +427,6 @@ function makeDirectQuestion(fact, facts, candidates) {
     source: "provided_notes"
   };
 }
-
 function makeClozeQuestion(sentence, candidates) {
   const keywords = getKeywords(sentence);
 
@@ -516,9 +551,12 @@ function generateMCQs({
   const sentences = splitSentences(notes);
 
   const facts = sentences
-    .map(extractFact)
-    .filter(Boolean);
-
+.map(extractFact)
+.filter(Boolean)
+.filter(fact =>
+isUsableEntity(fact.entity) &&
+isUsableAnswer(fact.answer)
+);
   const candidates = getAnswerCandidates(notes, facts);
 
   const questions = [];
