@@ -428,67 +428,111 @@ function makeDirectQuestion(fact, facts, candidates) {
   };
 }
 function makeClozeQuestion(sentence, candidates) {
-  const keywords = getKeywords(sentence);
+const cleanSentence = cleanText(sentence);
 
-  if (!keywords.length) {
-    return null;
-  }
-
-  // Prefer terms that appear important rather than blindly
-  // removing the last word in every sentence.
-  const answer = [...keywords]
-    .reverse()
-    .find(word => {
-      const pattern = new RegExp(
-        `\\b${escapeRegExp(word)}\\b`,
-        "i"
-      );
-
-      return (
-        word.length >= 5 &&
-        pattern.test(sentence) &&
-        !WEAK_WORDS.has(word.toLowerCase())
-      );
-    });
-
-  if (!answer) {
-    return null;
-  }
-
-  const pattern = new RegExp(
-    `\\b${escapeRegExp(answer)}\\b`,
-    "i"
-  );
-
-  const blanked = sentence.replace(
-    pattern,
-    "________"
-  );
-
-  if (
-    blanked === sentence ||
-    blanked.length < 20 ||
-    !/[A-Za-z].*________|________.*[A-Za-z]/i.test(blanked)
-  ) {
-    return null;
-  }
-
-  const options = makeOptions(answer, candidates);
-
-  if (!options) {
-    return null;
-  }
-
-  return {
-    questionType: "recall",
-    question: `Complete the statement: ${blanked}`,
-    options,
-    answer,
-    explanation: `The supplied notes state: ${sentence}`,
-    source: "provided_notes"
-  };
+if (
+cleanSentence.length < 35 ||
+cleanSentence.length > 500 ||
+!/[.!?]$/.test(cleanSentence) ||
+/^(because|although|however|therefore|other causes|another|this|that|these|those|it is|they are|such as)\b/i.test(cleanSentence)
+) {
+return null;
 }
 
+const keywords = getKeywords(cleanSentence);
+
+if (!keywords.length) {
+return null;
+}
+
+const answer = […keywords]
+.reverse()
+.find(word => {
+const pattern = new RegExp(
+\\b${escapeRegExp(word)}\\b,
+“i”
+);
+
+  return (
+    word.length >= 5 &&
+    pattern.test(cleanSentence) &&
+    !WEAK_WORDS.has(word.toLowerCase()) &&
+    /^[A-Za-z][A-Za-z-]*$/.test(word)
+  );
+});
+
+if (!answer) {
+return null;
+}
+
+const pattern = new RegExp(
+\\b${escapeRegExp(answer)}\\b,
+“i”
+);
+
+const blanked = cleanSentence.replace(
+pattern,
+“________”
+);
+
+if (
+blanked === cleanSentence ||
+blanked.length < 25 ||
+!/[A-Za-z].|.[A-Za-z]/i.test(blanked)
+) {
+return null;
+}
+
+// Prefer alternative answers drawn from complete extracted facts.
+const factAnswers = Array.isArray(candidates)
+? candidates
+.map(item =>
+typeof item === “string”
+? cleanText(item)
+: “”
+)
+.filter(value =>
+value.length >= 5 &&
+value.length <= 120 &&
+value.split(/\s+/).length >= 2 &&
+value.split(/\s+/).length <= 18 &&
+!/^(because|although|however|therefore|other)\b/i.test(value) &&
+normalize(value) !== normalize(answer)
+)
+: [];
+
+const uniqueAnswers = uniqueCandidates(factAnswers);
+
+if (uniqueAnswers.length < 3) {
+return null;
+}
+
+const options = makeOptions(answer, uniqueAnswers);
+
+if (!options || options.length !== 4) {
+return null;
+}
+
+const correctOptions = options.filter(option =>
+option.isCorrect === true
+);
+
+if (
+correctOptions.length !== 1 ||
+normalize(correctOptions[0].text) !== normalize(answer)
+) {
+return null;
+}
+
+return {
+questionType: “recall”,
+question: Complete the statement: ${blanked},
+options,
+answer,
+explanation: The supplied notes state: ${cleanSentence},
+source: “provided_notes”
+};
+}
 function getDifficultyOrder(facts, difficulty) {
   const definitions = facts.filter(
     fact => fact.type === "definition"
