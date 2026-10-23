@@ -483,14 +483,10 @@ blanked.length < 25 ||
 return null;
 }
 
-// Prefer alternative answers drawn from complete extracted facts.
 const factAnswers = Array.isArray(candidates)
 ? candidates
-.map(item =>
-typeof item === “string”
-? cleanText(item)
-: “”
-)
+.filter(item => typeof item === “string”)
+.map(item => cleanText(item))
 .filter(value =>
 value.length >= 5 &&
 value.length <= 120 &&
@@ -513,8 +509,8 @@ if (!options || options.length !== 4) {
 return null;
 }
 
-const correctOptions = options.filter(option =>
-option.isCorrect === true
+const correctOptions = options.filter(
+option => option.isCorrect === true
 );
 
 if (
