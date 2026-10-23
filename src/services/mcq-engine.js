@@ -1,6 +1,8 @@
 // DevTools API — MCQ Engine v1.4
 // Rule-based generation. No paid AI API required.
-
+const {
+  generateOptions
+} = require("./distractor-engine");
 const STOP_WORDS = new Set([
   "about", "after", "again", "also", "among", "because",
   "been", "before", "being", "between", "both", "could",
