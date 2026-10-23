@@ -479,22 +479,32 @@ function makeClozeQuestion(sentence, candidates) {
     return null;
   }
 
+   const answerWordCount = normalize(answer)
+    .split(/\s+/)
+    .filter(Boolean)
+    .length;
+
   const factAnswers = Array.isArray(candidates)
     ? candidates
         .filter(item => typeof item === "string")
         .map(item => cleanText(item))
-        .filter(value =>
-          value.length >= 5 &&
-          value.length <= 120 &&
-          value.split(/\s+/).length >= 2 &&
-          value.split(/\s+/).length <= 18 &&
-          !/^(because|although|however|therefore|other)\b/i.test(value) &&
-          normalize(value) !== normalize(answer)
-        )
+        .filter(value => {
+          const wordCount = normalize(value)
+            .split(/\s+/)
+            .filter(Boolean)
+            .length;
+
+          return (
+            value.length >= 3 &&
+            value.length <= 60 &&
+            wordCount === answerWordCount &&
+            normalize(value) !== normalize(answer) &&
+            !/^(because|although|however|therefore|other|another|this|that|these|those)\b/i.test(value)
+          );
+        })
     : [];
 
-  const uniqueAnswers = uniqueCandidates(factAnswers);
-
+  const uniqueAnswers = uniqueCandidates(factAnswers); 
   if (uniqueAnswers.length < 3) {
     return null;
   }
