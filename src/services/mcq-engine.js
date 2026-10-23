@@ -1,4 +1,4 @@
-// DevTools API — Rule-Based MCQ Engine
+// DevTools API — Rule-Based MCQ Engine v1.1
 // No paid AI API or external API key required.
 const STOP_WORDS = new Set([
   "about", "after", "again", "also", "among", "because",
@@ -13,7 +13,7 @@ const STOP_WORDS = new Set([
   "the", "was", "who", "will", "you", "can", "may",
   "use", "used", "using", "all", "any", "one", "two",
   "is", "in", "of", "to", "a", "an", "as", "at", "by",
-  "on", "or", "if", "it"
+  "on", "or", "if", "it", "process", "processes"
 ]);
 function cleanText(text) {
   return String(text || "")
@@ -26,8 +26,8 @@ function splitSentences(text) {
     .map(sentence => sentence.trim())
     .filter(sentence => sentence.length >= 25);
 }
-function getKeywords(sentence) {
-  const words = sentence.match(/\b[A-Za-z][A-Za-z'-]*\b/g) || [];
+function getKeywords(text) {
+  const words = text.match(/\b[A-Za-z][A-Za-z'-]*\b/g) || [];
   return [...new Set(
     words.filter(word =>
       word.length >= 4 &&
@@ -35,25 +35,45 @@ function getKeywords(sentence) {
     )
   )];
 }
-function createOptions(answer, keywords) {
-  const alternatives = [...new Set(
-    keywords.filter(word =>
-      word.toLowerCase() !== answer.toLowerCase()
-    )
-  )].slice(0, 3);
-  const options = [answer, ...alternatives];
-  // Add generic distractors when the notes contain
-  // too few alternative keywords.
+function escapeRegExp(text) {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+function createOptions(answer, sentenceKeywords, allKeywords) {
+  const answerLower = answer.toLowerCase();
+  const sentenceWords = new Set(
+    sentenceKeywords.map(word => word.toLowerCase())
+  );
+  // Prefer words appearing elsewhere in the supplied notes.
+  const otherSentenceWords = allKeywords.filter(word =>
+    word.toLowerCase() !== answerLower &&
+    !sentenceWords.has(word.toLowerCase())
+  );
+  const sameSentenceWords = sentenceKeywords.filter(word =>
+    word.toLowerCase() !== answerLower
+  );
+  const candidates = [
+    ...new Set([...otherSentenceWords, ...sameSentenceWords])
+  ];
+  const options = [answer];
+  for (const word of candidates) {
+    if (options.length >= 4) break;
+    if (!options.some(option =>
+      option.toLowerCase() === word.toLowerCase()
+    )) {
+      options.push(word);
+    }
+  }
+  // Use generic alternatives only when the notes lack enough words.
   const fallbacks = [
+    "Not stated in the notes",
     "None of the above",
-    "All of the above",
-    "Not mentioned in the notes"
+    "All of the above"
   ];
   for (const fallback of fallbacks) {
     if (options.length >= 4) break;
     options.push(fallback);
   }
-  // Shuffle options.
+  // Randomize the answer position.
   for (let i = options.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [options[i], options[j]] = [options[j], options[i]];
@@ -61,7 +81,7 @@ function createOptions(answer, keywords) {
   return options.map((text, index) => ({
     id: String.fromCharCode(65 + index),
     text,
-    isCorrect: text === answer
+    isCorrect: text.toLowerCase() === answerLower
   }));
 }
 function generateMCQs({
@@ -71,41 +91,49 @@ function generateMCQs({
   difficulty = "medium"
 } = {}) {
   if (typeof notes !== "string" || !notes.trim()) {
-    throw new Error(
-      "Study notes are required for rule-based question generation."
-    );
+    throw new Error("Study notes are required.");
   }
   if (!Number.isInteger(count) || count < 1 || count > 50) {
-    throw new Error("Count must be an integer between 1 and 50.");
+    throw new Error("Count must be between 1 and 50.");
   }
   if (!["easy", "medium", "hard"].includes(difficulty)) {
     throw new Error("Difficulty must be easy, medium, or hard.");
   }
   const sentences = splitSentences(notes);
+  const allKeywords = getKeywords(notes);
   const questions = [];
   const seen = new Set();
   for (const sentence of sentences) {
     if (questions.length >= count) break;
     const keywords = getKeywords(sentence);
     if (keywords.length < 2) continue;
-    // Select a meaningful keyword, avoiding the first word
-    // where possible.
     const answer = keywords[keywords.length - 1];
     const pattern = new RegExp(
-      `\\b${answer.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`,
+      "\\b" + escapeRegExp(answer) + "\\b",
       "i"
     );
     const questionText = sentence.replace(pattern, "________");
-    if (questionText === sentence || seen.has(questionText)) {
+    const questionKey = questionText.toLowerCase();
+    if (questionText === sentence || seen.has(questionKey)) {
       continue;
     }
-    seen.add(questionText);
+    const options = createOptions(
+      answer,
+      keywords,
+      allKeywords
+    );
+    // Every question must have exactly one correct option.
+    const correctCount = options.filter(
+      option => option.isCorrect
+    ).length;
+    if (correctCount !== 1) continue;
+    seen.add(questionKey);
     questions.push({
       id: questions.length + 1,
       topic: cleanText(topic) || "General Studies",
       difficulty,
       question: `Complete the statement: ${questionText}`,
-      options: createOptions(answer, keywords),
+      options,
       answer,
       explanation:
         `The supplied study note states: "${sentence}"`,
@@ -114,15 +142,15 @@ function generateMCQs({
   }
   return {
     success: true,
-    engine: "devtools-rule-based-mcq-v1",
+    engine: "devtools-rule-based-mcq-v1.1",
     topic: cleanText(topic) || "General Studies",
     difficulty,
     requestedCount: count,
     generatedCount: questions.length,
     questions,
     message: questions.length
-      ? "Questions generated from the supplied notes."
-      : "No suitable questions could be generated. Provide more detailed study notes."
+      ? "Questions generated from the supplied notes. Review before using in an exam."
+      : "No suitable questions could be generated. Provide more detailed notes."
   };
 }
 module.exports = {
