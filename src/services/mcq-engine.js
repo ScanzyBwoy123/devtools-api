@@ -445,7 +445,7 @@ if (!keywords.length) {
 return null;
 }
 
-const answer = […keywords]
+const answer = [...keywords]
 .reverse()
 .find(word => {
 const pattern = new RegExp(
