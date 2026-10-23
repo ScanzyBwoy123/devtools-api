@@ -466,8 +466,8 @@ return null;
 }
 
 const pattern = new RegExp(
-\\b${escapeRegExp(answer)}\\b,
-“i”
+  "\\b" + escapeRegExp(word) + "\\b",
+  "i"
 );
 
 const blanked = cleanSentence.replace(
