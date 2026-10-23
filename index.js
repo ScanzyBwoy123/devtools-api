@@ -101,13 +101,31 @@ app.get("/v1/capabilities", (req, res) => {
         endpoint: "/v1/pdf/extract",
         method: "POST",
         status: "available",
-        description:
-          "Extract selectable text from uploaded PDF documents."
+        description: "Extract selectable text from uploaded PDF documents."
       },
       {
         id: "mcq-engine",
         name: "MCQ Generation",
-        status: "planned"
+        endpoint: "/v1/mcq/generate",
+        method: "POST",
+        status: "available",
+        description: "Generate multiple-choice questions from supplied notes."
+      },
+      {
+        id: "web-research",
+        name: "Web Research",
+        endpoint: "/v1/research/search",
+        method: "GET",
+        status: "available",
+        description: "Retrieve topic-related Wikipedia articles and extracts."
+      },
+      {
+        id: "research-questions",
+        name: "Research-Based Question Generation",
+        endpoint: "/v1/research/questions",
+        method: "POST",
+        status: "available",
+        description: "Generate questions using retrieved research extracts."
       },
       {
         id: "document-engine",
