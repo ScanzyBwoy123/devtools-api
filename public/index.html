@@ -210,7 +210,7 @@ button:disabled {
       statusBox.textContent = "Please wait. Generating your questions...";
       results.replaceChildren();
       try {
-        const response = await fetch(API_BASE + "/questions", {
+        const response = await fetch(API_BASE + "/v1/mcq/generate", {
           method: "POST",
           headers: {
             "Content-Type": "application/json"
