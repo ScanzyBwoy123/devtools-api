@@ -111,7 +111,12 @@
       iPhone, browser memory and available storage.
     </p>
 
-    <button id="loadBtn">1. Load Local AI Model</button>
+<button
+  id="loadBtn"
+  onclick="document.getElementById('status').textContent='BUTTON WORKS: JavaScript responded to your tap.'"
+>
+  1. Load Local AI Model
+</button>
     <div id="status" role="status" aria-live="polite">
       Model not loaded. Tap the button to begin.
     </div>
