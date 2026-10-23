@@ -1,46 +1,47 @@
-// DevTools API v1.6 — Distractor Engine
-// Selects relevant answer options from supplied study notes.
+// DevTools API v1.6 — General-Purpose Distractor Engine
+// Rule-based answer generation for multiple subjects.
 // No paid AI API required.
+
 function cleanText(value) {
   return String(value || "")
     .replace(/\s+/g, " ")
     .trim()
     .replace(/^[,;:.]+|[,;:.]+$/g, "");
 }
+
 function normalize(value) {
   return cleanText(value)
     .toLowerCase()
     .replace(/[.!?]+$/g, "");
 }
+
 function uniqueValues(values) {
   const seen = new Set();
+
   return values
     .map(cleanText)
     .filter(value => {
       const key = normalize(value);
+
       if (!key || seen.has(key)) return false;
+
       seen.add(key);
       return true;
     });
 }
+
 function shuffle(values) {
   const result = [...values];
+
   for (let i = result.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
+
     [result[i], result[j]] = [result[j], result[i]];
   }
+
   return result;
 }
-// Remove introductory words that do not form part
-// of a useful answer choice.
-function cleanCandidate(value) {
-  return cleanText(value)
-    .replace(/^(a|an|the)\s+/i, "")
-    .replace(/^(is|are|was|were)\s+/i, "")
-    .replace(/^(used to|use to)\s+/i, "")
-    .trim();
-}
-// Split study notes into sentences.
+
 function splitSentences(notes) {
   return String(notes || "")
     .replace(/\r/g, "\n")
@@ -48,113 +49,157 @@ function splitSentences(notes) {
     .map(cleanText)
     .filter(sentence => sentence.length >= 15);
 }
-// Extract meaningful terms and short phrases.
+
+// Extract meaningful phrases instead of isolated filler words.
 function extractCandidates(notes) {
   const sentences = splitSentences(notes);
   const candidates = [];
+
+  const stopWords = new Set([
+    "about", "after", "again", "also", "because",
+    "before", "being", "between", "could", "during",
+    "each", "from", "have", "into", "more", "most",
+    "other", "same", "should", "some", "than",
+    "that", "their", "them", "then", "there", "these",
+    "they", "this", "those", "through", "under",
+    "very", "were", "what", "when", "where", "which",
+    "while", "with", "would", "your", "and", "are",
+    "but", "for", "has", "its", "not", "the", "was",
+    "who", "will", "you", "can", "may", "use", "used",
+    "using", "all", "any", "one", "two", "is", "in",
+    "of", "to", "a", "an", "as", "at", "by", "on",
+    "or", "if", "it", "helps", "help", "does"
+  ]);
+
   for (const sentence of sentences) {
-    // Keep the complete sentence as a possible option.
-    if (sentence.length <= 100) {
-      candidates.push(sentence);
-    }
-    // Extract phrases from common definition patterns.
+    // Capture the subject of a definition.
     const definition = sentence.match(
       /^(.+?)\s+is\s+(?:a|an|the)\s+(.+?)[.!?]*$/i
     );
+
     if (definition) {
-      candidates.push(cleanCandidate(definition[1]));
-      candidates.push(cleanCandidate(definition[2]));
+      candidates.push(cleanText(definition[1]));
+      candidates.push(cleanText(definition[2]));
     }
-    // Extract purpose phrases.
+
+    // Capture purpose statements.
     const purpose = sentence.match(
       /^(.+?)\s+is\s+(?:used|performed|carried out)\s+to\s+(.+?)[.!?]*$/i
     );
+
     if (purpose) {
-      candidates.push(cleanCandidate(purpose[1]));
-      candidates.push(cleanCandidate(purpose[2]));
+      candidates.push(cleanText(purpose[1]));
+      candidates.push(cleanText(purpose[2]));
     }
-    // Extract phrases from function statements.
+
+    // Capture function statements.
     const functionMatch = sentence.match(
-      /^(.+?)\s+(?:removes|absorbs|produces|measures|monitors|examines|prevents|contains|provides|causes|requires)\s+(.+?)[.!?]*$/i
+      /^(.+?)\s+(?:removes|absorbs|produces|measures|monitors|examines|prevents|contains|provides|causes|requires|increases|decreases)\s+(.+?)[.!?]*$/i
     );
+
     if (functionMatch) {
-      candidates.push(cleanCandidate(functionMatch[1]));
-      candidates.push(cleanCandidate(functionMatch[2]));
+      candidates.push(cleanText(functionMatch[1]));
+      candidates.push(cleanText(functionMatch[2]));
     }
-    // Extract meaningful words and short phrases.
+
+    // Capture useful multiword concepts from the notes.
     const words = sentence.match(
       /\b[A-Za-z][A-Za-z'-]*\b/g
     ) || [];
-    candidates.push(
-      ...words.filter(word => word.length >= 5)
-    );
+
+    let phrase = [];
+
+    for (const word of words) {
+      if (stopWords.has(word.toLowerCase())) {
+        if (phrase.length >= 2) {
+          candidates.push(phrase.join(" "));
+        }
+
+        phrase = [];
+        continue;
+      }
+
+      phrase.push(word);
+
+      if (phrase.length >= 4) {
+        candidates.push(phrase.join(" "));
+        phrase.shift();
+      }
+    }
+
+    if (phrase.length >= 2) {
+      candidates.push(phrase.join(" "));
+    }
   }
+
   return uniqueValues(candidates)
-    .filter(value => value.length >= 3)
+    .filter(value => value.length >= 4)
     .filter(value => value.length <= 100);
 }
-// Identify whether two answers have an exact match.
-function sameAnswer(first, second) {
-  return normalize(first) === normalize(second);
-}
-// Create four options using only supplied material.
+
 function generateOptions(answer, candidates = []) {
   const correctAnswer = cleanText(answer);
+
   if (!correctAnswer) {
     throw new Error("A correct answer is required.");
   }
+
+  const correct = normalize(correctAnswer);
+
   const alternatives = uniqueValues(candidates)
-    .filter(value => !sameAnswer(value, correctAnswer))
-    .filter(value => value.length <= 100)
+    .filter(value => normalize(value) !== correct)
+    .filter(value => value.length >= 4 && value.length <= 100)
     .filter(value => {
-      // Avoid options that merely repeat the answer.
-      const correct = normalize(correctAnswer);
       const candidate = normalize(value);
-      if (correct.length < 5 || candidate.length < 5) {
-        return true;
-      }
+
+      // Avoid options that merely repeat the correct answer.
       return !(
         candidate.includes(correct) ||
         correct.includes(candidate)
       );
     });
+
   if (alternatives.length < 3) {
     return {
       success: false,
       options: [],
       message:
-        "Not enough distinct alternatives were found in the supplied notes."
+        "Not enough distinct answer alternatives were found in the notes."
     };
   }
-  // Prefer shorter answer choices because they are easier
-  // to read in an examination interface.
+
+  // Prefer options with lengths reasonably close to the answer.
   const ranked = alternatives
     .map(value => ({
       value,
-      score: Math.abs(
-        value.length - correctAnswer.length
-      )
+      score: Math.abs(value.length - correctAnswer.length)
     }))
     .sort((a, b) => a.score - b.score);
-  // Randomize among the more similarly sized candidates.
+
   const pool = ranked
-    .slice(0, Math.min(12, ranked.length))
+    .slice(0, Math.min(15, ranked.length))
     .map(item => item.value);
+
   const selected = shuffle(pool).slice(0, 3);
   const choices = shuffle([correctAnswer, ...selected]);
+
   return {
     success: true,
     options: choices.map((text, index) => ({
       id: String.fromCharCode(65 + index),
       text,
-      isCorrect: sameAnswer(text, correctAnswer)
+      isCorrect: normalize(text) === correct
     }))
   };
 }
+
 function generateOptionsFromNotes(answer, notes) {
-  const candidates = extractCandidates(notes);
-  return generateOptions(answer, candidates);
+  return generateOptions(
+    answer,
+    extractCandidates(notes)
+  );
 }
+
 module.exports = {
   generateOptions,
   extractCandidates,
