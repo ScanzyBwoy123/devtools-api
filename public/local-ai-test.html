@@ -225,46 +225,58 @@
 
     try {
       const result = await generator(
-        [
-          {
-            role: "system",
-            content: "You are DevTools AI, a helpful assistant. Answer clearly and accurately."
-          },
-          {
-            role: "user",
-            content: prompt
-          }
-        ],
-        {
-          max_new_tokens: 180,
-          temperature: 0.7,
-          do_sample: true
-        }
-      );
-
-      const response = result?.[0]?.generated_text;
-      let answer = "";
-
-      if (Array.isArray(response)) {
-        answer = response
-          .filter(item => item.role === "assistant")
-          .map(item => item.content)
-          .join("\n");
-      } else if (typeof response === "string") {
-        answer = response;
-      }
-
-      answerBox.textContent = answer || "The model returned no readable text.";
-      setStatus("Response generated in the browser.");
-    } catch (error) {
-      console.error(error);
-      answerBox.textContent = "Generation failed. Try a shorter prompt.";
-      setStatus("Generation error: " + (error?.message || String(error)));
-    } finally {
-      busy = false;
-      askBtn.disabled = false;
+  [
+    {
+      role: "system",
+      content:
+        "You are DevTools AI, a helpful and accurate assistant. " +
+        "Answer the user's exact question. Explain concepts clearly, " +
+        "organize longer answers with headings or numbered steps, " +
+        "and avoid repeating yourself. For educational questions, " +
+        "use simple language and correct scientific facts. " +
+        "If you are uncertain, say so instead of inventing facts. " +
+        "Finish your answer with a complete sentence."
+    },
+    {
+      role: "user",
+      content: prompt
     }
-  });
+  ],
+  {
+    max_new_tokens: 300,
+    temperature: 0.4,
+    do_sample: false,
+    repetition_penalty: 1.1
+  }
+);
+
+const response = result?.[0]?.generated_text;
+let answer = "";
+
+if (Array.isArray(response)) {
+  const assistantMessages = response.filter(
+    item => item.role === "assistant"
+  );
+
+  answer = assistantMessages
+    .map(item => item.content || "")
+    .join("\n\n")
+    .trim();
+} else if (typeof response === "string") {
+  answer = response.trim();
+
+  // Remove the prompt if the pipeline returns the entire conversation.
+  if (answer.startsWith(prompt)) {
+    answer = answer.slice(prompt.length).trim();
+  }
+}
+
+answerBox.textContent =
+  answer || "The model returned no readable text.";
+
+setStatus(
+  "Response generated locally. Please check important facts for accuracy."
+);
 </script>
 </body>
 </html>
