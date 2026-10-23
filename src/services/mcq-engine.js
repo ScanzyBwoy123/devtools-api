@@ -1,6 +1,5 @@
-// DevTools API — MCQ Engine v1.3
-// Rule-based question generation.
-// No paid AI API or external API key required.
+// DevTools API — MCQ Engine v1.4
+// Rule-based generation. No paid AI API required.
 
 const STOP_WORDS = new Set([
   "about", "after", "again", "also", "among", "because",
@@ -15,35 +14,8 @@ const STOP_WORDS = new Set([
   "the", "was", "who", "will", "you", "can", "may",
   "use", "used", "using", "all", "any", "one", "two",
   "is", "in", "of", "to", "a", "an", "as", "at", "by",
-  "on", "or", "if", "it", "process", "processes",
-  "according", "notes", "statement", "following"
+  "on", "or", "if", "it", "from", "according"
 ]);
-
-const SUBJECT_TERMS = {
-  nursing: [
-    "assessment", "diagnosis", "planning",
-    "implementation", "evaluation", "infection",
-    "patient", "airway", "sterile technique",
-    "vital signs", "documentation"
-  ],
-
-  respiratory: [
-    "tracheostomy", "suctioning", "bronchoscopy",
-    "pneumothorax", "oxygen", "airway",
-    "respiration", "ventilation"
-  ],
-
-  statistics: [
-    "data", "mean", "median", "mode",
-    "population", "sample", "frequency",
-    "standard deviation", "probability"
-  ],
-
-  photosynthesis: [
-    "sunlight", "chlorophyll", "glucose",
-    "oxygen", "carbon dioxide", "water"
-  ]
-};
 
 function cleanText(text) {
   return String(text || "")
@@ -59,6 +31,10 @@ function splitSentences(text) {
     .filter(sentence => sentence.length >= 20);
 }
 
+function escapeRegExp(text) {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function getKeywords(text) {
   const words = text.match(/\b[A-Za-z][A-Za-z'-]*\b/g) || [];
 
@@ -70,41 +46,79 @@ function getKeywords(text) {
   )];
 }
 
-function escapeRegExp(text) {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+// Extract facts that can support direct examination questions.
+function extractFact(sentence) {
+  let match;
+
+  // Example:
+  // "A tracheostomy is a surgical opening created in the trachea."
+  match = sentence.match(
+    /^(.+?)\s+is\s+(?:a|an|the)\s+(.+)$/i
+  );
+
+  if (match) {
+    return {
+      entity: cleanText(match[1]),
+      answer: cleanText(match[2]),
+      type: "definition",
+      sentence
+    };
+  }
+
+  // Example:
+  // "Suctioning removes secretions from the airway."
+  match = sentence.match(
+    /^(.+?)\s+(removes|absorbs|produces|measures|monitors|examines|increases|decreases|prevents|contains|provides|causes|requires)\s+(.+)$/i
+  );
+
+  if (match) {
+    return {
+      entity: cleanText(match[1]),
+      answer: cleanText(`${match[2]} ${match[3]}`),
+      type: "function",
+      sentence
+    };
+  }
+
+  // Example:
+  // "Bronchoscopy is used to examine the airways."
+  match = sentence.match(
+    /^(.+?)\s+is\s+(?:used|performed|carried out)\s+to\s+(.+)$/i
+  );
+
+  if (match) {
+    return {
+      entity: cleanText(match[1]),
+      answer: cleanText(match[2]),
+      type: "purpose",
+      sentence
+    };
+  }
+
+  return null;
 }
 
-function getSubjectTerms(topic, notes) {
-  const text = `${topic} ${notes}`.toLowerCase();
+function shuffle(items) {
+  const result = [...items];
 
-  for (const [subject, terms] of Object.entries(SUBJECT_TERMS)) {
-    if (text.includes(subject)) {
-      return terms;
-    }
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+
+    [result[i], result[j]] = [result[j], result[i]];
   }
 
-  if (/\bnurs(e|ing|es)\b|\bpatient\b|\bclinical\b/.test(text)) {
-    return SUBJECT_TERMS.nursing;
-  }
-
-  if (
-    /\btracheostomy\b|\bbronchoscopy\b|\bsuctioning\b|\bairway\b/.test(text)
-  ) {
-    return SUBJECT_TERMS.respiratory;
-  }
-
-  return [];
+  return result;
 }
 
-function uniqueOptions(answer, candidates) {
+function makeOptions(answer, candidates) {
   const correct = cleanText(answer);
-  const seen = new Set([correct.toLowerCase()]);
   const options = [correct];
+  const seen = new Set([correct.toLowerCase()]);
 
   for (const candidate of candidates) {
     const value = cleanText(candidate);
 
-    if (!value || value.length > 140) continue;
+    if (!value || value.length > 160) continue;
 
     const key = value.toLowerCase();
 
@@ -116,87 +130,86 @@ function uniqueOptions(answer, candidates) {
     if (options.length === 4) break;
   }
 
-  // If the notes do not provide enough alternatives,
-  // use explicit placeholders rather than inventing facts.
-  const fallbacks = [
-    "Not stated in the supplied notes",
-    "None of the other options"
-  ];
-
-  for (const fallback of fallbacks) {
-    if (options.length >= 4) break;
-
-    if (!seen.has(fallback.toLowerCase())) {
-      options.push(fallback);
-      seen.add(fallback.toLowerCase());
-    }
+  // Do not invent facts just to fill all four choices.
+  if (options.length < 4) {
+    return null;
   }
 
-  // Shuffle the answer choices.
-  for (let i = options.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-
-    [options[i], options[j]] = [options[j], options[i]];
-  }
-
-  return options.map((text, index) => ({
+  return shuffle(options).map((text, index) => ({
     id: String.fromCharCode(65 + index),
     text,
     isCorrect: text.toLowerCase() === correct.toLowerCase()
   }));
 }
 
-function getQuestionStyle(sentence, index, difficulty) {
-  const lower = sentence.toLowerCase();
+function makeClozeQuestion(sentence, keywords, allKeywords) {
+  const answer = [...keywords]
+    .reverse()
+    .find(word => word.length >= 4);
 
-  if (
-    /\b(function|purpose|role|responsib|used to|used for)\b/.test(lower)
-  ) {
-    return {
-      type: "function",
-      stem: "Which statement best completes this information:"
-    };
+  if (!answer) return null;
+
+  const pattern = new RegExp(
+    `\\b${escapeRegExp(answer)}\\b`,
+    "i"
+  );
+
+  const blanked = sentence.replace(pattern, "________");
+
+  if (blanked === sentence) return null;
+
+  // Prefer terms found in the notes instead of unrelated
+  // generic choices.
+  const candidates = allKeywords.filter(
+    word => word.toLowerCase() !== answer.toLowerCase()
+  );
+
+  const options = makeOptions(answer, candidates);
+
+  if (!options) return null;
+
+  return {
+    questionType: "recall",
+    question: `Complete the statement: ${blanked}`,
+    options,
+    answer,
+    explanation: `The supplied notes state: "${sentence}"`,
+    source: "provided_notes"
+  };
+}
+
+function makeDirectQuestion(fact, facts) {
+  const otherAnswers = facts
+    .filter(item =>
+      item.type === fact.type &&
+      item.entity.toLowerCase() !== fact.entity.toLowerCase()
+    )
+    .map(item => item.answer);
+
+  const options = makeOptions(fact.answer, otherAnswers);
+
+  // A direct question is only generated when the notes
+  // contain enough comparable facts for meaningful choices.
+  if (!options) return null;
+
+  let question;
+
+  if (fact.type === "definition") {
+    question = `According to the notes, what is ${fact.entity}?`;
+  } else if (fact.type === "purpose") {
+    question = `What is the purpose of ${fact.entity}?`;
+  } else {
+    question = `According to the notes, what does ${fact.entity} do?`;
   }
 
-  if (
-    /\b(is defined as|is the definition of|refers to|means)\b/.test(lower)
-  ) {
-    return {
-      type: "definition",
-      stem: "Complete this definition:"
-    };
-  }
-
-  if (difficulty === "hard" && /\b(because|therefore|results in|causes)\b/.test(lower)) {
-    return {
-      type: "application",
-      stem: "Complete this cause-and-effect statement:"
-    };
-  }
-
-  if (difficulty === "easy") {
-    return {
-      type: "recall",
-      stem: "Complete this statement:"
-    };
-  }
-
-  const styles = [
-    {
-      type: "knowledge",
-      stem: "According to the supplied notes, complete this statement:"
-    },
-    {
-      type: "recall",
-      stem: "Choose the word that completes this statement:"
-    },
-    {
-      type: "understanding",
-      stem: "Which option correctly completes this information:"
-    }
-  ];
-
-  return styles[index % styles.length];
+  return {
+    questionType: fact.type,
+    question,
+    options,
+    answer: fact.answer,
+    explanation: `The supplied notes state: "${fact.sentence}"`,
+    source: "provided_notes"
+  };
 }
 
 function generateMCQs({
@@ -210,7 +223,7 @@ function generateMCQs({
   }
 
   if (!Number.isInteger(count) || count < 1 || count > 50) {
-    throw new Error("Count must be an integer between 1 and 50.");
+    throw new Error("Count must be between 1 and 50.");
   }
 
   if (!["easy", "medium", "hard"].includes(difficulty)) {
@@ -218,8 +231,10 @@ function generateMCQs({
   }
 
   const sentences = splitSentences(notes);
-  const allKeywords = getKeywords(notes);
-  const subjectTerms = getSubjectTerms(topic, notes);
+  const keywords = getKeywords(notes);
+  const facts = sentences
+    .map(extractFact)
+    .filter(Boolean);
 
   const questions = [];
   const seen = new Set();
@@ -227,76 +242,48 @@ function generateMCQs({
   for (const sentence of sentences) {
     if (questions.length >= count) break;
 
-    const keywords = getKeywords(sentence);
+    const fact = extractFact(sentence);
 
-    if (keywords.length < 2) continue;
+    let question = fact
+      ? makeDirectQuestion(fact, facts)
+      : null;
 
-    // Prefer meaningful terms near the end of a sentence.
-    // Skip very short or generic terms.
-    const answer = [...keywords]
-      .reverse()
-      .find(word => word.length >= 4);
+    // If there are not enough comparable facts for a direct
+    // question, try a fill-in-the-blank question.
+    if (!question) {
+      question = makeClozeQuestion(
+        sentence,
+        getKeywords(sentence),
+        keywords
+      );
+    }
 
-    if (!answer) continue;
+    if (!question) continue;
 
-    const pattern = new RegExp(
-      `\\b${escapeRegExp(answer)}\\b`,
-      "i"
-    );
+    const key = question.question.toLowerCase();
 
-    const blankedSentence = sentence.replace(
-      pattern,
-      "________"
-    );
-
-    if (blankedSentence === sentence) continue;
-
-    const questionKey = blankedSentence.toLowerCase();
-
-    if (seen.has(questionKey)) continue;
-
-    seen.add(questionKey);
-
-    const style = getQuestionStyle(
-      sentence,
-      questions.length,
-      difficulty
-    );
-
-    // Prefer alternatives related to the subject and notes.
-    const candidates = [
-      ...subjectTerms,
-      ...allKeywords.filter(
-        word => word.toLowerCase() !== answer.toLowerCase()
-      )
-    ];
-
-    const options = uniqueOptions(answer, candidates);
+    if (seen.has(key)) continue;
+    seen.add(key);
 
     questions.push({
       id: questions.length + 1,
       topic: cleanText(topic) || "General Studies",
       difficulty,
-      questionType: style.type,
-      question: `${style.stem} ${blankedSentence}`,
-      options,
-      answer,
-      explanation: `The supplied notes state: "${sentence}"`,
-      source: "provided_notes"
+      ...question
     });
   }
 
   return {
     success: true,
-    engine: "devtools-rule-based-mcq-v1.3",
+    engine: "devtools-rule-based-mcq-v1.4",
     topic: cleanText(topic) || "General Studies",
     difficulty,
     requestedCount: count,
     generatedCount: questions.length,
     questions,
     message: questions.length
-      ? "Questions generated from supplied notes. Review answer accuracy before examination use."
-      : "No suitable questions found. Provide more detailed study notes."
+      ? "Questions generated from the supplied notes. Review all questions and answers before examination use."
+      : "Not enough suitable information was found. Provide more detailed study notes."
   };
 }
 
