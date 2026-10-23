@@ -113,6 +113,14 @@ function shuffle(items) {
 }
 
 function makeOptions(answer, candidates) {
+  const result = generateOptions(answer, candidates);
+
+  if (!result.success) {
+    return null;
+  }
+
+  return result.options;
+}
   const correct = cleanText(answer);
   const options = [correct];
   const seen = new Set([correct.toLowerCase()]);
