@@ -150,51 +150,74 @@ button:disabled {
       return element;
     }
     function displayQuestions(data) {
-      results.replaceChildren();
-      const questions = data.questions;
-      if (!Array.isArray(questions) || questions.length === 0) {
-        throw new Error("The API returned no questions. Please try again.");
-      }
-      addText(results, "h2", "Generated Questions");
-      questions.forEach((question, index) => {
-        const card = document.createElement("article");
-        card.className = "question";
-        addText(
-          card,
-          "h3",
-          "Question " + (index + 1) + ": " + question.question
-        );
-        const options = question.options || {};
-        ["A", "B", "C", "D"].forEach(letter => {
-          if (options[letter] !== undefined) {
-            addText(
-              card,
-              "p",
-              letter + ". " + options[letter]
-            ).className = "option";
-          }
-        });
-        const answer = document.createElement("div");
-        answer.className = "answer";
-        const correctLetter = question.correct_answer;
-        const correctText = options[correctLetter] || "";
-        addText(
-          answer,
-          "strong",
-          "Correct answer: " + correctLetter +
-          (correctText ? ". " + correctText : "")
-        );
-        if (question.explanation) {
-          addText(
-            answer,
-            "p",
-            "Explanation: " + question.explanation
-          );
-        }
-        card.appendChild(answer);
-        results.appendChild(card);
-      });
+  results.replaceChildren();
+  const questions = data.questions;
+  if (!Array.isArray(questions) || questions.length === 0) {
+    throw new Error(
+      data.message || "The API returned no questions. Please try again."
+    );
+  }
+  addText(results, "h2", "Generated Questions");
+  questions.forEach((question, index) => {
+    const card = document.createElement("article");
+    card.className = "question";
+    addText(
+      card,
+      "h3",
+      "Question " + (index + 1) + ": " + question.question
+    );
+    const options = Array.isArray(question.options)
+      ? question.options
+      : [];
+    const letters = ["A", "B", "C", "D"];
+    options.forEach((option, optionIndex) => {
+      const optionText =
+        typeof option === "string"
+          ? option
+          : option.text || option.label || "";
+      addText(
+        card,
+        "p",
+        (letters[optionIndex] || "") + ". " + optionText
+      ).className = "option";
+    });
+    const correct = options.find(
+      option =>
+        typeof option === "object" &&
+        option !== null &&
+        option.isCorrect === true
+    );
+    const correctText = correct
+      ? correct.text || correct.label || ""
+      : question.answer || "";
+    const correctIndex = correct
+      ? options.indexOf(correct)
+      : -1;
+    const correctLetter =
+      correctIndex >= 0 ? letters[correctIndex] || "" : "";
+    const answer = document.createElement("div");
+    answer.className = "answer";
+    addText(
+      answer,
+      "strong",
+      "Correct answer: " +
+        (correctLetter ? correctLetter + ". " : "") +
+        correctText
+    );
+    if (question.explanation) {
+      addText(
+        answer,
+        "p",
+        "Explanation: " + question.explanation
+      );
     }
+    card.appendChild(answer);
+    results.appendChild(card);
+  });
+  if (data.message) {
+    addText(results, "p", data.message).className = "small";
+  }
+}
     form.addEventListener("submit", async function(event) {
       event.preventDefault();
       const topic = document.getElementById("topic").value.trim();
