@@ -209,9 +209,9 @@ function generateOptions(answer, candidates = []) {
     options: choices.map((text, index) => ({
       id: String.fromCharCode(65 + index),
       text,
-      isCorrect:
+            isCorrect:
         normalize(text) === normalize(correctAnswer)
-    })
+    }))
   };
 }
 function extractCandidates(notes) {
