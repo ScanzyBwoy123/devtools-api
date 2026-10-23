@@ -348,6 +348,65 @@ function makeDirectQuestion(fact, facts) {
     source: "provided_notes"
   };
 }
+// Select distractor terms from sentences sharing context
+// with the target sentence. No paid AI API required.
+function getContextualCandidates(targetSentence, allSentences, answer) {
+  const targetKeywords = new Set(
+    getKeywords(targetSentence)
+      .map(word => word.toLowerCase())
+      .filter(word => word !== answer.toLowerCase())
+  );
+
+  const answerKey = normalize(answer);
+  const scored = new Map();
+
+  for (const sourceSentence of allSentences) {
+    if (
+      normalize(sourceSentence) === normalize(targetSentence)
+    ) {
+      continue;
+    }
+
+    const sourceKeywords = getKeywords(sourceSentence)
+      .map(word => word.toLowerCase());
+
+    const sharedKeywords = sourceKeywords.filter(
+      word => targetKeywords.has(word)
+    );
+
+    // Ignore sentences with no meaningful context overlap.
+    if (sharedKeywords.length === 0) {
+      continue;
+    }
+
+    for (const word of sourceKeywords) {
+      const key = normalize(word);
+
+      if (
+        word.length < 5 ||
+        key === answerKey ||
+        STOP_WORDS.has(key) ||
+        WEAK_WORDS.has(key)
+      ) {
+        continue;
+      }
+
+      if (!scored.has(key)) {
+        scored.set(key, {
+          word,
+          score: 0
+        });
+      }
+
+      scored.get(key).score += sharedKeywords.length;
+    }
+  }
+
+  return [...scored.values()]
+    .sort((a, b) => b.score - a.score)
+    .map(item => item.word)
+    .filter(word => normalize(word) !== answerKey);
+}
 function makeClozeQuestion(sentence, candidates) {
   const cleanSentence = cleanText(sentence);
   if (
@@ -395,25 +454,17 @@ function makeClozeQuestion(sentence, candidates) {
     .split(/\s+/)
     .filter(Boolean)
     .length;
-  const factAnswers = Array.isArray(candidates)
-    ? candidates
-        .filter(item => typeof item === "string")
-        .map(cleanText)
-        .filter(value => {
-          const wordCount = normalize(value)
-            .split(/\s+/)
-            .filter(Boolean)
-            .length;
-          return (
-            value.length >= 3 &&
-            value.length <= 60 &&
-            wordCount === answerWordCount &&
-            normalize(value) !== normalize(answer) &&
-            !/^(because|although|however|therefore|other|another|this|that|these|those)\b/i.test(value)
-          );
-        })
-    : [];
-  const uniqueAnswers = uniqueCandidates(factAnswers);
+    // Prefer distractors from related sentences rather than
+  // mixing every candidate from the entire document.
+  const contextualCandidates = getContextualCandidates(
+    cleanSentence,
+    candidates,
+    answer
+  );
+
+  const uniqueAnswers = uniqueCandidates(
+    contextualCandidates
+  );
   if (uniqueAnswers.length < 3) {
     return null;
   }
@@ -534,7 +585,7 @@ function generateMCQs({
     if (questions.length >= count) {
       break;
     }
-    const question = makeClozeQuestion(sentence, candidates);
+    const question = makeClozeQuestion(sentence, sentences);
     if (!question) {
       continue;
     }
