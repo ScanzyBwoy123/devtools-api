@@ -296,6 +296,17 @@ answerBox.textContent =
 setStatus(
   "Response generated locally. Please check important facts for accuracy."
 );
+
+    } catch (error) {
+      console.error("DevTools AI generation error:", error);
+      answerBox.textContent =
+        "Generation failed: " + (error?.message || String(error));
+      setStatus("Generation failed. Please try again.");
+    } finally {
+      busy = false;
+      askBtn.disabled = false;
+    }
+  });
 </script>
 </body>
 </html>
