@@ -1,6 +1,7 @@
 const express = require("express");
 const pdfRouter = require("./src/routes/pdf");
 const mcqRouter = require("./src/routes/mcq");
+const researchRouter = require("./src/routes/research");
 const app = express();
 
 const PORT = process.env.PORT || 3000;
