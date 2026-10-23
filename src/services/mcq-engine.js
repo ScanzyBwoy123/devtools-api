@@ -150,8 +150,6 @@ function makeOptions(answer, candidates) {
     text,
     isCorrect: text.toLowerCase() === correct.toLowerCase()
   }));
-}
-
 function makeClozeQuestion(sentence, keywords, allKeywords) {
   const answer = [...keywords]
     .reverse()
