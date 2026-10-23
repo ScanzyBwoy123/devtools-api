@@ -129,13 +129,25 @@ function isUsableEntity(entity) {
     return false;
   }
 
+  // Reject incomplete or misleading question subjects.
   if (
-    /^(because|although|however|therefore|other|another|this|that|these|those|it|they|he|she|we|you|also|during|after|before|when|while|which|who|such)\b/i.test(value)
+    /^(because|although|however|therefore|other|another|this|that|these|those|it|they|he|she|we|you|also|during|after|before|when|while|which|who|such|not every|not all)\b/i.test(value)
   ) {
     return false;
   }
 
-  if (/[,;:]$/.test(value)) {
+  // Reject subjects that contain multiple clauses,
+  // arrows, or embedded numerical relationships.
+  if (/[,:;→←=]/.test(value)) {
+    return false;
+  }
+
+  if (/\b(and|but|because|although|while|which|that|then)\b/i.test(value)) {
+    return false;
+  }
+
+  // A question subject should be reasonably concise.
+  if (value.split(/\s+/).length > 5) {
     return false;
   }
 
@@ -145,7 +157,6 @@ function isUsableEntity(entity) {
 
   return true;
 }
-
 // Extract straightforward facts from complete sentences.
 function extractFact(sentence) {
   let match;
