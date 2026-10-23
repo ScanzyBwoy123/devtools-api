@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DevTools API - MCQ Test</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 700px;
+      margin: 30px auto;
+      padding: 16px;
+      line-height: 1.6;
+      background: #f8fafc;
+    }
+    h1, h2 {
+      color: #1769ff;
+    }
+    textarea, input, select, button {
+      box-sizing: border-box;
+      width: 100%;
+      padding: 12px;
+      margin: 8px 0;
+      font-size: 16px;
+      border-radius: 6px;
+    }
+    textarea, input, select {
+      border: 1px solid #ccc;
+      background: white;
+    }
+    textarea {
+      min-height: 180px;
+    }
+    button {
+      background: #1769ff;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+    button:disabled {
+      background: #888;
+    }
+    pre {
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      background: #eef2f7;
+      padding: 12px;
+      border-radius: 6px;
+    }
+  </style>
+</head>
+<body>
+  <h1>DevTools API</h1>
+  <h2>MCQ Engine Test</h2>
+  <label for="topic">Topic</label>
+  <input id="topic" value="Basic Science">
+  <label for="notes">Study notes</label>
+  <textarea id="notes">Photosynthesis is the process by which green plants make their food using sunlight. Chlorophyll is the green pigment that absorbs light energy. The roots absorb water and minerals from the soil. The leaves exchange gases through tiny openings called stomata.</textarea>
+  <label for="count">Number of questions</label>
+  <select id="count">
+    <option value="3">3</option>
+    <option value="5">5</option>
+    <option value="10">10</option>
+  </select>
+  <label for="difficulty">Difficulty</label>
+  <select id="difficulty">
+    <option value="easy">Easy</option>
+    <option value="medium" selected>Medium</option>
+    <option value="hard">Hard</option>
+  </select>
+  <button id="generate">Generate Questions</button>
+  <p id="status">Ready to test.</p>
+  <pre id="result"></pre>
+  <script>
+    const API_URL =
+      "https://devtools-api-production-5d61.up.railway.app";
+    const button = document.getElementById("generate");
+    const status = document.getElementById("status");
+    const result = document.getElementById("result");
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      status.textContent = "Generating questions...";
+      result.textContent = "";
+      try {
+        const response = await fetch(
+          API_URL + "/v1/mcq/generate",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              topic: document.getElementById("topic").value,
+              notes: document.getElementById("notes").value,
+              count: Number(
+                document.getElementById("count").value
+              ),
+              difficulty:
+                document.getElementById("difficulty").value
+            })
+          }
+        );
+        const data = await response.json();
+        result.textContent = JSON.stringify(data, null, 2);
+        status.textContent = response.ok
+          ? "Request completed."
+          : "Request failed: HTTP " + response.status;
+      } catch (error) {
+        status.textContent = "Connection error.";
+        result.textContent =
+          error.message +
+          "\nCheck the API deployment and browser connection.";
+      } finally {
+        button.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
