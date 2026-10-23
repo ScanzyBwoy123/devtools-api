@@ -221,25 +221,58 @@ function extractCandidates(notes) {
     .map(cleanText)
     .filter(Boolean);
   const candidates = [];
+  const blockedPhrases = new Set([
+    "notes",
+    "study",
+    "studies",
+    "chapter",
+    "unit",
+    "topic",
+    "example",
+    "examples",
+    "question",
+    "questions",
+    "answer",
+    "answers",
+    "introduction",
+    "conclusion",
+    "definition",
+    "definitions",
+    "following",
+    "above",
+    "below"
+  ]);
   for (const sentence of sentences) {
     const words = getWords(sentence);
-    // Keep short, meaningful terms and phrases.
-    // Avoid adding whole sentences as distractors.
+    // Keep meaningful individual terms, not document labels.
     for (const word of words) {
       if (
         word.length >= 4 &&
         !WEAK_WORDS.has(word) &&
-        !GENERIC_WORDS.has(word)
+        !GENERIC_WORDS.has(word) &&
+        !blockedPhrases.has(word)
       ) {
         candidates.push(word);
       }
     }
-    // Extract phrases of two to four words.
+    // Extract short phrases that may be useful answer options.
     const phrases = sentence.match(
       /\b[A-Za-z][A-Za-z'-]*(?:\s+[A-Za-z][A-Za-z'-]*){1,3}\b/g
     ) || [];
     for (const phrase of phrases) {
-      if (!isSentenceFragment(phrase)) {
+      const normalizedPhrase = normalize(phrase);
+      const phraseWords = getWords(phrase);
+      if (
+        phraseWords.length >= 2 &&
+        phraseWords.length <= 4 &&
+        !blockedPhrases.has(normalizedPhrase) &&
+        !isSentenceFragment(phrase) &&
+        phraseWords.some(word =>
+          !WEAK_WORDS.has(word) &&
+          !GENERIC_WORDS.has(word) &&
+          !blockedPhrases.has(word)
+        )
+      ) {
         candidates.push(phrase);
       }
     }
