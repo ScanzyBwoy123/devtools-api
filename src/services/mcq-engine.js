@@ -2,7 +2,10 @@
 // Improved rule-based question generation.
 // No paid AI API required.
 
-const { generateOptions } = require("./distractor-engine");
+const {
+  generateOptions,
+  extractCandidates
+} = require("./distractor-engine");
 
 const STOP_WORDS = new Set([
   "about", "after", "again", "also", "among",
@@ -265,6 +268,9 @@ function getAnswerCandidates(notes, facts) {
     candidates.push(...getKeywords(sentence));
   }
 
+  // Add complete statements and meaningful phrases.
+  candidates.push(...extractCandidates(notes));
+
   return uniqueCandidates(candidates);
 }
 
@@ -424,7 +430,6 @@ function makeClozeQuestion(sentence, candidates) {
   if (
     cleanSentence.length < 35 ||
     cleanSentence.length > 500 ||
-    !/[.!?]$/.test(cleanSentence) ||
     /^(because|although|however|therefore|other causes|another|this|that|these|those|it is|they are|such as)\b/i.test(cleanSentence)
   ) {
     return null;
@@ -520,7 +525,6 @@ function makeClozeQuestion(sentence, candidates) {
     source: "provided_notes"
   };
 }
-
 function getDifficultyOrder(facts, difficulty) {
   const definitions = facts.filter(
     fact => fact.type === "definition"
