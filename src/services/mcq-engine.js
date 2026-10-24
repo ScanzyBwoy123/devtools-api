@@ -4,7 +4,7 @@
 
 function cleanText(value) {
   return String(value || "")
-    .replace(/\u00a0/g, " ")
+   .replace(/[*_`]/g, "")
     .replace(/[ \t]+/g, " ")
     .replace(/\s+/g, " ")
     .trim()
@@ -146,7 +146,7 @@ function extractHeadingFacts(notes) {
     const label = cleanText(match[1]);
 
 // Keep the complete sentence so answer options have a consistent format.
-const answer = cleanText(sentence);
+const answer = cleanText(match[2]);
 
     // A heading followed by a single word is usually not a complete fact.
     if (!isUsableLabel(label)) continue;
