@@ -427,10 +427,6 @@ function buildQuestionText(fact) {
       return `Which statement best describes ${label}?`;
   }
 }
-    default:
-      return `Which statement best describes ${label}?`;
-  }
-}
 function shuffle(array) {
   const result = [...array];
 
