@@ -130,40 +130,30 @@ function isUsableLabel(value) {
   return /[a-z]/i.test(text);
 }
 
-function classifyFact(label, content) {
-  const text = `${label} ${content}`.toLowerCase();
+function isResearchNoise(value) {
+  const text = cleanText(value);
 
-  if (/\b(causes?|etiology|risk factors?|predisposing factors?)\b/.test(text)) {
-    return "causes";
+  if (text.length < 35 || text.length > 240) {
+    return true;
   }
 
-  if (/\b(signs?|symptoms?|manifestations?|clinical features?)\b/.test(text)) {
-    return "symptoms";
+  if (
+    /\b(?:et al\.?|doi:|isbn|issn|pmid|bibliography|references|external links|see also|citation needed|some sources offer different definitions|disambiguation)\b/i.test(text)
+  ) {
+    return true;
   }
 
-  if (/\b(nursing interventions?|nursing management|nursing care|preventive measures?|management|treatment|treatments)\b/.test(text)) {
-    return "interventions";
+  const hasPredicate =
+    /\b(?:is|are|was|were|means|refers to|includes|allows|requires|causes?|leads to|results in|prevents|reduces|increases|produces|provides?|used for|has|have|can|may|occurs|contains|creates|helps)\b/i.test(text);
+
+  if (!hasPredicate) return true;
+
+  if (text.includes(";") && !/[.!?]/.test(text)) {
+    return true;
   }
 
-  if (/\b(complications?|adverse effects?|consequences?)\b/.test(text)) {
-    return "complications";
-  }
-
-  if (/\b(definition|defined as|refers to|meaning)\b/.test(text)) {
-    return "definitions";
-  }
-
-  if (/\b(functions?|purposes?|roles?|responsibilities)\b/.test(text)) {
-    return "functions";
-  }
-
-  if (/\b(significance|importance|advantages?|disadvantages?)\b/.test(text)) {
-    return "importance";
-  }
-
-  return "general";
+  return false;
 }
-
 // Extract facts from lines such as:
 // Definition: A tracheostomy is an opening made in the trachea.
 function extractHeadingFacts(notes) {
@@ -312,9 +302,9 @@ function extractResearchFacts(sentences) {
     /\b(?:is|are|was|were|means|refers to|consists of|includes|allows|requires|causes|leads to|results in|prevents|reduces|increases|produces|has|have)\b/i;
 
   for (const sentence of sentences) {
-    if (sentence.length < 35 || sentence.length > 240) {
-      continue;
-    }
+    if (isResearchNoise(sentence)) {
+  continue;
+}
 
     if (/^(?:there is|there are|in this article|according to)\b/i.test(sentence)) {
       continue;
@@ -395,10 +385,9 @@ function similarityScore(first, second) {
 function selectDistractors(fact, candidates, researchMode = false) {
   const answerKey = normalize(fact.answer);
 
-  const answerLimit = researchMode ? 1.01 : 0.6;
-  const labelLimit = researchMode ? 1.01 : 0.7;
-  const optionLimit = researchMode ? 1.01 : 0.6;
-
+  const answerLimit = researchMode ? 0.82 : 0.6;
+const labelLimit = researchMode ? 0.82 : 0.7;
+const optionLimit = researchMode ? 0.78 : 0.6;
   const ranked = candidates
     .filter(candidate => {
       const candidateKey = normalize(candidate.answer);
@@ -680,8 +669,8 @@ function generateMCQs({
         .join(" ");
 
       if (!isUsableLabel(label)) {
-        label = cleanTopic;
-      }
+  continue;
+}
 
       const key =
         `${normalize(label)}|${normalize(sentence)}`;
