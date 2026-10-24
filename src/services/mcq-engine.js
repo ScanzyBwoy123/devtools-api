@@ -304,31 +304,54 @@ function extractListFacts(notes) {
   return facts;
 }
 
-function uniqueFacts(facts) {
-  const result = [];
-  const seen = new Set();
+// Extract additional facts from online research articles.
+function extractResearchFacts(sentences) {
+  const facts = [];
 
-  for (const fact of facts) {
-    const label = cleanText(fact.label);
-    const answer = cleanText(fact.answer);
+  const predicate =
+    /\b(?:is|are|was|were|means|refers to|consists of|includes|allows|requires|causes|leads to|results in|prevents|reduces|increases|produces|has|have)\b/i;
 
-    if (!label || !answer || !isUsableLabel(label)) continue;
+  for (const sentence of sentences) {
+    if (sentence.length < 35 || sentence.length > 240) {
+      continue;
+    }
 
-    const key = `${normalize(label)}|${normalize(answer)}`;
+    if (/^(?:there is|there are|in this article|according to)\b/i.test(sentence)) {
+      continue;
+    }
 
-    if (seen.has(key)) continue;
-    seen.add(key);
+    const match = sentence.match(predicate);
 
-    result.push({
-      ...fact,
+    if (!match || match.index < 2 || match.index > 100) {
+      continue;
+    }
+
+    let label = sentence
+      .slice(0, match.index)
+      .replace(/\([^)]*\)/g, " ")
+      .replace(/\[[^\]]*\]/g, " ")
+      .split(/,|;|\bor\b/i)[0];
+
+    label = cleanText(label)
+      .split(/\s+/)
+      .slice(0, 5)
+      .join(" ");
+
+    if (!isUsableLabel(label) || !isUsableAnswer(sentence)) {
+      continue;
+    }
+
+    facts.push({
       label,
-      answer
+      answer: sentence,
+      type: classifyFact(label, sentence),
+      source: sentence,
+      sourceType: "research_sentence"
     });
   }
 
-  return result;
+  return facts;
 }
-
 function getKeywords(value) {
   return new Set(
     normalize(value)
@@ -572,7 +595,8 @@ function generateMCQs({
     ...extractHeadingFacts(notes),
     ...extractDefinitionFacts(sentences),
     ...extractListFacts(notes),
-    ...extractStatementFacts(sentences)
+    ...extractStatementFacts(sentences),
+    ...(researchMode ? extractResearchFacts(sentences) : [])
   ]);
 
   const questions = [];
