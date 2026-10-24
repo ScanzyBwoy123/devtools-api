@@ -288,33 +288,62 @@ function extractListFacts(notes) {
 }
 
 function uniqueFacts(facts) {
-  const seen = new Set();
   const result = [];
+  const seenExact = new Set();
+  const seenAnswers = new Set();
+  const seenConcepts = new Set();
 
   for (const fact of facts) {
-    const key = `${normalize(fact.label)}|${normalize(fact.answer)}`;
+    const label = normalize(fact.label || "");
+    const answer = normalize(fact.answer || "");
+    const source = normalize(fact.source || "");
 
-    if (seen.has(key)) continue;
+    if (!label || !answer) continue;
 
-    seen.add(key);
-    result.push(fact);
+    // Remove exact duplicates.
+    const exactKey = `${label}|${answer}`;
+
+    if (seenExact.has(exactKey)) continue;
+    seenExact.add(exactKey);
+
+    // Avoid keeping the same answer extracted from different places.
+    const answerKey = answer
+      .replace(/[^\w\s]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    if (answerKey && seenAnswers.has(answerKey)) continue;
+
+    // Identify the main content words in the label.
+    const conceptWords = label
+      .split(/\s+/)
+      .filter(word => word.length > 2 && !STOP_WORDS.has(word));
+
+    const conceptKey = conceptWords.join(" ");
+
+    // Avoid duplicate labels when their answers are also identical.
+    if (
+      conceptKey &&
+      seenConcepts.has(`${conceptKey}|${answerKey}`)
+    ) {
+      continue;
+    }
+
+    if (answerKey) seenAnswers.add(answerKey);
+
+    if (conceptKey) {
+      seenConcepts.add(`${conceptKey}|${answerKey}`);
+    }
+
+    result.push({
+      ...fact,
+      label: String(fact.label).trim(),
+      answer: String(fact.answer).trim()
+    });
   }
 
   return result;
 }
-
-const STOP_WORDS = new Set([
-  "about", "after", "again", "also", "among", "and", "are",
-  "associated", "because", "before", "being", "between", "body",
-  "can", "cause", "causes", "describes", "during", "each", "from",
-  "have", "into", "includes", "including", "its", "may", "more",
-  "most", "often", "only", "other", "over", "part", "result",
-  "results", "should", "some", "such", "that", "the", "their",
-  "them", "then", "there", "these", "this", "those", "through",
-  "under", "used", "using", "very", "which", "while", "with",
-  "within", "what", "when", "where", "your", "from"
-]);
-
 function getKeywords(value) {
   return new Set(
     normalize(value)
