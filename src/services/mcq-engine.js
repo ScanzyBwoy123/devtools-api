@@ -352,6 +352,19 @@ function extractResearchFacts(sentences) {
 
   return facts;
 }
+// Remove duplicate facts while preserving their original order.
+function uniqueFacts(facts) {
+  const seen = new Set();
+  return facts.filter(fact => {
+    const key =
+      `${normalize(fact.label)}|${normalize(fact.answer)}`;
+    if (!fact.label || !fact.answer || seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+}
 function getKeywords(value) {
   return new Set(
     normalize(value)
