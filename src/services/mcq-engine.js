@@ -356,15 +356,12 @@ function similarityScore(first, second) {
 
   return overlap / Math.min(a.size, b.size);
 }
-
 function selectDistractors(fact, candidates, researchMode = false) {
   const answerKey = normalize(fact.answer);
 
-  // Web research returns longer sentences than structured study notes.
-  // Use different thresholds while still rejecting duplicate answers.
-  const answerLimit = researchMode ? 0.95 : 0.6;
-  const labelLimit = researchMode ? 0.98 : 0.7;
-  const optionLimit = researchMode ? 0.95 : 0.6;
+  const answerLimit = researchMode ? 1.01 : 0.6;
+  const labelLimit = researchMode ? 1.01 : 0.7;
+  const optionLimit = researchMode ? 1.01 : 0.6;
 
   const ranked = candidates
     .filter(candidate => {
@@ -374,10 +371,12 @@ function selectDistractors(fact, candidates, researchMode = false) {
         return false;
       }
 
-      // Never use identical or contained answers as alternatives.
       if (
-        candidateKey.includes(answerKey) ||
-        answerKey.includes(candidateKey)
+        !researchMode &&
+        (
+          candidateKey.includes(answerKey) ||
+          answerKey.includes(candidateKey)
+        )
       ) {
         return false;
       }
@@ -430,7 +429,6 @@ function selectDistractors(fact, candidates, researchMode = false) {
 
   return selected;
 }
-
 function buildQuestionText(fact) {
   const label = cleanText(fact.label).replace(/[.!?]+$/g, "");
 
