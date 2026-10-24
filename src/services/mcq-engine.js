@@ -348,88 +348,62 @@ function hasSharedKeywords(first, second) {
 function selectDistractors(fact, candidates) {
   const answerKey = normalize(fact.answer);
   const labelKey = normalize(fact.label);
-
   const ranked = candidates
     .filter(candidate => {
       const candidateKey = normalize(candidate.answer);
-
-      if (candidateKey === answerKey) return false;
-
+      if (!candidateKey || candidateKey === answerKey) {
+        return false;
+      }
       if (
         candidateKey.includes(answerKey) ||
         answerKey.includes(candidateKey)
       ) {
         return false;
       }
-
-      // Avoid nearly identical answer wording.
-      if (similarityScore(fact.answer, candidate.answer) > 0.85) {
+      if (similarityScore(fact.answer, candidate.answer) > 0.9) {
         return false;
       }
-
-      // Answers from the same list heading are preferred.
-      const sameLabel = normalize(candidate.label) === labelKey;
-
-      // Otherwise require some subject overlap.
-      if (
-        !sameLabel &&
-        !hasSharedKeywords(
-          `${fact.label} ${fact.answer}`,
-          `${candidate.label} ${candidate.answer}`
-        )
-      ) {
-        return false;
-      }
-
       return true;
     })
     .map(candidate => {
       const sameLabel =
         normalize(candidate.label) === labelKey ? 1 : 0;
-
       const sameType =
         candidate.type === fact.type ? 1 : 0;
-
+      const subjectSimilarity = similarityScore(
+        `${fact.label} ${fact.answer}`,
+        `${candidate.label} ${candidate.answer}`
+      );
       const answerSimilarity = similarityScore(
         fact.answer,
         candidate.answer
       );
-
-      const labelSimilarity = similarityScore(
-        fact.label,
-        candidate.label
-      );
-
       return {
         candidate,
         score:
-          sameLabel * 6 +
-          sameType * 1.5 +
-          answerSimilarity * 2 +
-          labelSimilarity
+          sameLabel * 5 +
+          sameType * 2 +
+          subjectSimilarity * 2 +
+          answerSimilarity
       };
     })
     .sort((a, b) => b.score - a.score);
-
   const selected = [];
-  const seenAnswers = new Set();
-
+  const seenAnswers = new Set([answerKey]);
   for (const item of ranked) {
     const candidate = item.candidate;
     const key = normalize(candidate.answer);
-
-    if (seenAnswers.has(key)) continue;
-
-    // Do not fill options with unrelated facts just to reach four.
+    if (seenAnswers.has(key)) {
+      continue;
+    }
     selected.push(candidate.answer);
     seenAnswers.add(key);
-
-    if (selected.length === 3) break;
+    if (selected.length === 3) {
+      break;
+    }
   }
-
   return selected;
 }
-
 function buildQuestionText(fact) {
   switch (fact.type) {
     case "causes":
