@@ -405,33 +405,34 @@ function selectDistractors(fact, candidates) {
   return selected;
 }
 function buildQuestionText(fact) {
+  const label = cleanText(fact.label).replace(/[.!?]+$/g, "");
+
   switch (fact.type) {
     case "causes":
-      return `According to the supplied notes, which statement identifies a cause or risk factor related to ${fact.label}?`;
+      return `Which of the following is a cause or risk factor related to ${label}?`;
 
     case "symptoms":
-      return `According to the supplied notes, which statement describes a sign or symptom related to ${fact.label}?`;
+      return `Which of the following is a sign or symptom of ${label}?`;
 
     case "interventions":
-      return `According to the supplied notes, which action is recommended for ${fact.label}?`;
+      return `Which action is appropriate for the management of ${label}?`;
 
     case "complications":
-      return `According to the supplied notes, which statement identifies a complication related to ${fact.label}?`;
+      return `Which of the following is a complication of ${label}?`;
 
     case "definitions":
-      return `According to the supplied notes, what does ${fact.label} mean?`;
+      return `What is the meaning of ${label}?`;
 
     case "functions":
-      return `According to the supplied notes, which statement describes a function of ${fact.label}?`;
+      return `Which of the following describes a function of ${label}?`;
 
     case "importance":
-      return `According to the supplied notes, which statement describes the importance of ${fact.label}?`;
+      return `Why is ${label} important?`;
 
     default:
-      return `According to the supplied notes, which statement is associated with ${fact.label}?`;
+      return `Which statement best describes ${label}?`;
   }
 }
-
 function shuffle(array) {
   const result = [...array];
 
@@ -476,7 +477,7 @@ function makeQuestion(fact, facts) {
     question: buildQuestionText(fact),
     options,
     answer: fact.answer,
-    explanation: `The supplied notes state: ${fact.source}`,
+    explanation: cleanText(fact.source),
     source: "provided_notes"
   };
 }
