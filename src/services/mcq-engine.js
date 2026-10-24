@@ -645,7 +645,91 @@ function generateMCQs({
       ...question
     });
   }
+  // Fallback for research articles that do not match
+  // the strict study-note extraction patterns.
+  if (researchMode && questions.length === 0) {
+    const fallbackFacts = [];
+    const fallbackSeen = new Set();
 
+    for (const sentence of sentences) {
+      if (
+        sentence.length < 35 ||
+        sentence.length > 240 ||
+        !isUsableAnswer(sentence)
+      ) {
+        continue;
+      }
+
+      const predicate = sentence.match(
+        /\b(?:is defined as|refers to|means|is characterized by|is associated with|causes?|leads to|results in|includes|requires|prevents|reduces|increases|produces|has|have|is|are|was|were)\b/i
+      );
+
+      let label = predicate &&
+        predicate.index >= 2 &&
+        predicate.index <= 100
+        ? sentence.slice(0, predicate.index)
+        : "";
+
+      label = cleanText(label)
+        .replace(/\([^)]*\)/g, " ")
+        .split(/[,;:]|\bor\b/i)[0];
+
+      label = cleanText(label)
+        .split(/\s+/)
+        .slice(0, 5)
+        .join(" ");
+
+      if (!isUsableLabel(label)) {
+        label = cleanTopic;
+      }
+
+      const key =
+        `${normalize(label)}|${normalize(sentence)}`;
+
+      if (fallbackSeen.has(key)) continue;
+
+      fallbackSeen.add(key);
+
+      fallbackFacts.push({
+        label,
+        answer: sentence,
+        type: classifyFact(label, sentence),
+        source: sentence,
+        sourceType: "research_fallback"
+      });
+    }
+
+    for (const fact of shuffle(fallbackFacts)) {
+      if (questions.length >= count) break;
+
+      const answerKey = normalize(fact.answer);
+
+      if (seenAnswers.has(answerKey)) continue;
+
+      const question = makeQuestion(
+        fact,
+        fallbackFacts,
+        true
+      );
+
+      if (!question) continue;
+
+      const questionKey =
+        `${normalize(fact.label)}|${answerKey}`;
+
+      if (seenQuestions.has(questionKey)) continue;
+
+      seenQuestions.add(questionKey);
+      seenAnswers.add(answerKey);
+
+      questions.push({
+        id: questions.length + 1,
+        topic: cleanTopic,
+        difficulty,
+        ...question
+      });
+    }
+  }
   return {
     success: questions.length > 0,
     engine: researchMode
