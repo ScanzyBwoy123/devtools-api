@@ -128,7 +128,7 @@ async function searchWebResearch(query, limit = 5) {
     prop: "extracts",
     pageids: pageIds,
     explaintext: 1,
-    exchars: 0,
+    exchars: 1200,
     format: "json",
     formatversion: 2
   });
