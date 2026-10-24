@@ -494,7 +494,46 @@ function shuffle(array) {
 
   return result;
 }
+function buildExplanation(fact) {
+  const text = `${fact.label} ${fact.answer}`.toLowerCase();
 
+  const explanations = [
+    {
+      pattern: /\b(rubor|redness)\b/,
+      text: "Rubor is redness associated with inflammation. It commonly results from increased blood flow to the affected area."
+    },
+    {
+      pattern: /\b(calor|heat)\b/,
+      text: "Calor means heat. In inflammation, increased blood flow to the affected tissue contributes to the rise in temperature."
+    },
+    {
+      pattern: /\b(tumor|swelling)\b/,
+      text: "Tumor is the traditional term for swelling among the classic signs of inflammation. Swelling commonly occurs when fluid accumulates in tissues."
+    },
+    {
+      pattern: /\bdolor\b/,
+      text: "Dolor means pain. Inflammation can cause pain through inflammatory mediators and stimulation of sensory nerve endings."
+    },
+    {
+      pattern: /\bfunctio laesa\b/,
+      text: "Functio laesa means impaired or lost function. Pain, swelling, and tissue damage can interfere with normal movement or organ function."
+    },
+    {
+      pattern: /\bchronic inflammation\b/,
+      text: "Chronic inflammation is prolonged inflammation that may persist for weeks, months, or years. Macrophages and lymphocytes commonly participate in this response."
+    }
+  ];
+
+  const match = explanations.find(item => item.pattern.test(text));
+
+  if (match) {
+    return match.text;
+  }
+
+  return fact.source && fact.source !== fact.answer
+    ? `The supplied notes explain this concept as follows: ${fact.source}`
+    : `The supplied notes identify ${fact.label} as an important concept. Review the related definition and supporting facts in your study material.`;
+}
 function makeQuestion(fact, facts) {
   const distractors = selectDistractors(
     fact,
@@ -527,7 +566,7 @@ function makeQuestion(fact, facts) {
     question: buildQuestionText(fact),
     options,
     answer: fact.answer,
-    explanation: cleanText(fact.source),
+    explanation: buildExplanation(fact),
     source: "provided_notes"
   };
 }
