@@ -406,60 +406,83 @@ function hasSharedKeywords(first, second) {
 function selectDistractors(fact, candidates) {
   const answerKey = normalize(fact.answer);
   const labelKey = normalize(fact.label);
+
   const ranked = candidates
     .filter(candidate => {
       const candidateKey = normalize(candidate.answer);
+
       if (!candidateKey || candidateKey === answerKey) {
         return false;
       }
+
+      // Reject answers that contain or are contained in
+      // the correct answer.
       if (
         candidateKey.includes(answerKey) ||
         answerKey.includes(candidateKey)
       ) {
         return false;
       }
-      if (similarityScore(fact.answer, candidate.answer) > 0.9) {
+
+      // Reject answers that are too similar to the correct answer.
+      if (
+        similarityScore(fact.answer, candidate.answer) >= 0.6
+      ) {
         return false;
       }
+
+      // Reject answers that express almost the same concept.
+      if (
+        similarityScore(fact.label, candidate.label) >= 0.7
+      ) {
+        return false;
+      }
+
       return true;
     })
     .map(candidate => {
-      const sameLabel =
-        normalize(candidate.label) === labelKey ? 1 : 0;
-      const sameType =
-        candidate.type === fact.type ? 1 : 0;
+      const sameType = candidate.type === fact.type ? 1 : 0;
+
       const subjectSimilarity = similarityScore(
         `${fact.label} ${fact.answer}`,
         `${candidate.label} ${candidate.answer}`
       );
-      const answerSimilarity = similarityScore(
-        fact.answer,
-        candidate.answer
-      );
+
       return {
         candidate,
-        score:
-          sameLabel * 5 +
-          sameType * 2 +
-          subjectSimilarity * 2 +
-          answerSimilarity
+        score: sameType * 2 + subjectSimilarity
       };
     })
     .sort((a, b) => b.score - a.score);
+
   const selected = [];
   const seenAnswers = new Set([answerKey]);
+
   for (const item of ranked) {
     const candidate = item.candidate;
     const key = normalize(candidate.answer);
+
     if (seenAnswers.has(key)) {
       continue;
     }
+
+    // Avoid selecting distractors that resemble one another.
+    const duplicatesAnotherOption = selected.some(existing =>
+      similarityScore(existing, candidate.answer) >= 0.6
+    );
+
+    if (duplicatesAnotherOption) {
+      continue;
+    }
+
     selected.push(candidate.answer);
     seenAnswers.add(key);
+
     if (selected.length === 3) {
       break;
     }
   }
+
   return selected;
 }
 function buildQuestionText(fact) {
