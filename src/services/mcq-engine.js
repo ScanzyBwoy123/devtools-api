@@ -144,7 +144,9 @@ function extractHeadingFacts(notes) {
     if (!match) continue;
 
     const label = cleanText(match[1]);
-    const answer = cleanText(match[2]);
+
+// Keep the complete sentence so answer options have a consistent format.
+const answer = cleanText(sentence);
 
     // A heading followed by a single word is usually not a complete fact.
     if (!isUsableLabel(label)) continue;
@@ -406,29 +408,25 @@ function selectDistractors(fact, candidates) {
 }
 function buildQuestionText(fact) {
   const label = cleanText(fact.label).replace(/[.!?]+$/g, "");
-
   switch (fact.type) {
     case "causes":
       return `Which of the following is a cause or risk factor related to ${label}?`;
-
     case "symptoms":
       return `Which of the following is a sign or symptom of ${label}?`;
-
     case "interventions":
       return `Which action is appropriate for the management of ${label}?`;
-
     case "complications":
       return `Which of the following is a complication of ${label}?`;
-
     case "definitions":
-      return `What is the meaning of ${label}?`;
-
+      return `Which statement correctly describes ${label}?`;
     case "functions":
       return `Which of the following describes a function of ${label}?`;
-
     case "importance":
       return `Why is ${label} important?`;
-
+    default:
+      return `Which statement best describes ${label}?`;
+  }
+}
     default:
       return `Which statement best describes ${label}?`;
   }
@@ -518,8 +516,11 @@ function generateMCQs({
   for (const fact of shuffle(facts)) {
     if (questions.length >= count) break;
 
-    const questionKey = normalize(fact.label);
-    const answerKey = normalize(fact.answer);
+    // Allow different facts under the same heading to produce questions.
+const questionKey =
+  `${normalize(fact.label)}|${normalize(fact.answer)}`;
+
+const answerKey = normalize(fact.answer);
 
     if (
       seenQuestions.has(questionKey) ||
