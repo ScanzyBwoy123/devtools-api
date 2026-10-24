@@ -1,12 +1,34 @@
-// DevTools API — MCQ Engine v6.0
-// Rule-based MCQ generation using supplied notes only.
+// DevTools API — MCQ Engine v6.1
+// Rule-based MCQ generation from study notes and web research.
 // No paid AI API or external AI key required.
+
+"use strict";
+
+const STOP_WORDS = new Set([
+  "about", "after", "again", "also", "among", "and", "are",
+  "associated", "because", "before", "being", "between", "body",
+  "can", "cause", "causes", "describes", "during", "each", "from",
+  "have", "into", "includes", "including", "its", "may", "more",
+  "most", "often", "only", "other", "over", "part", "result",
+  "results", "should", "some", "such", "that", "the", "their",
+  "them", "then", "there", "these", "this", "those", "through",
+  "under", "used", "using", "very", "which", "while", "with",
+  "within", "what", "when", "where", "your", "was", "were",
+  "been", "being", "has", "had", "its", "their", "they",
+  "he", "she", "it", "his", "her", "them", "who", "whom"
+]);
 
 function cleanText(value) {
   return String(value || "")
     .replace(/\u00a0/g, " ")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
     .replace(/[*_`]/g, "")
-    .replace(/^\s*(?:[-*•]|\d+[.)])\s+/, "")
+    .replace(/^\s*(?:[-*•●▪◦]|\d+[.)])\s+/, "")
     .replace(/[ \t]+/g, " ")
     .replace(/\s+/g, " ")
     .trim()
@@ -26,11 +48,11 @@ function splitSentences(notes) {
     .replace(/[•●▪◦]/g, "\n")
     .split(/\n+|(?<=[.!?])\s+/)
     .map(cleanText)
-    .filter(text =>
-      text.length >= 20 &&
-      text.length <= 500 &&
-      /[a-z]/i.test(text) &&
-      !/^(chapter|contents|references|bibliography|page\s+\d+)/i.test(text)
+    .filter(sentence =>
+      sentence.length >= 20 &&
+      sentence.length <= 500 &&
+      /[a-z]/i.test(sentence) &&
+      !/^(chapter|contents|references|bibliography|page\s+\d+)/i.test(sentence)
     );
 }
 
@@ -40,12 +62,11 @@ function isBadHeading(value) {
   return (
     /^(chapter|unit|contents|references|bibliography|appendix|table of contents)\b/i.test(text) ||
     /^page\s+\d+/i.test(text) ||
-    /^(introduction|conclusion|objectives|references|acknowledgements)$/i.test(text) ||
+    /^(introduction|conclusion|objectives|acknowledgements)$/i.test(text) ||
     text.split(/\s+/).length > 12
   );
 }
 
-// Reject weak answers without rejecting legitimate short list items.
 function isUsableAnswer(value, allowShort = false) {
   const text = cleanText(value);
 
@@ -69,7 +90,6 @@ function isUsableAnswer(value, allowShort = false) {
     return false;
   }
 
-  // Heading-like fragments are not useful standalone answers.
   if (
     /^[A-Z0-9\s()/-]{2,45}$/.test(text) &&
     !/[.!?:]/.test(text) &&
@@ -100,7 +120,6 @@ function isUsableLabel(value) {
     return false;
   }
 
-  // Reject unfinished sentences being used as concept labels.
   if (
     /\b(depends|can|could|should|would|may|might|must|will|was|were|are|is|means|causes?|results?|leads|increases|decreases|requires|includes|produces)\b/i.test(text) ||
     /\b(the|a|an|of|to|for|with|from|on|in|by|and|or|because|when|that|which)$/i.test(text)
@@ -145,23 +164,22 @@ function classifyFact(label, content) {
   return "general";
 }
 
+// Extract facts from lines such as:
+// Definition: A tracheostomy is an opening made in the trachea.
 function extractHeadingFacts(notes) {
   const facts = [];
 
   for (const rawLine of String(notes || "").split(/\r?\n/)) {
     const line = cleanText(rawLine);
-    const match = line.match(/^([^:]{2,90}):\s*(.{3,260})$/);
+    const match = line.match(/^([^:]{2,90}):\s*(.{12,260})$/);
 
     if (!match) continue;
 
     const label = cleanText(match[1]);
+    const answer = cleanText(match[2]);
 
-// Keep the complete sentence so answer options have a consistent format.
-const answer = cleanText(match[2]);
-
-    // A heading followed by a single word is usually not a complete fact.
     if (!isUsableLabel(label)) continue;
-    if (!isUsableAnswer(answer, false)) continue;
+    if (!isUsableAnswer(answer)) continue;
 
     facts.push({
       label,
@@ -174,48 +192,8 @@ const answer = cleanText(match[2]);
 
   return facts;
 }
-// Extract useful factual statements from ordinary paragraphs.
-function extractStatementFacts(sentences) {
-  const facts = [];
 
-  const pattern =
-    /^(.{2,90}?)\s+(is defined as|refers to|means|is characterized by|is associated with|is caused by|causes?|leads to|results in|occurs when|is used for|includes|consists of|requires|prevents|reduces|increases|produces|has|have|is|are)\b/i;
-
-  for (const sentence of sentences) {
-    const text = cleanText(sentence);
-
-    if (text.length < 25 || text.length > 260) {
-      continue;
-    }
-
-    const match = text.match(pattern);
-
-    if (!match) {
-      continue;
-    }
-
-    const label = cleanText(match[1]);
-
-    if (!isUsableLabel(label)) {
-      continue;
-    }
-
-    if (!isUsableAnswer(text, false)) {
-      continue;
-    }
-
-    facts.push({
-      label,
-      answer: text,
-      type: classifyFact(label, text),
-      source: text,
-      sourceType: "statement"
-    });
-  }
-
-  return facts;
-}
-
+// Extract definitions from complete sentences.
 function extractDefinitionFacts(sentences) {
   const facts = [];
 
@@ -224,9 +202,7 @@ function extractDefinitionFacts(sentences) {
     /^(.{2,70}?)\s+is\s+(?:a|an|the)\s+(.{8,220})$/i
   ];
 
-  for (const rawSentence of sentences) {
-    const sentence = cleanText(rawSentence);
-
+  for (const sentence of sentences) {
     for (const pattern of patterns) {
       const match = sentence.match(pattern);
 
@@ -236,12 +212,8 @@ function extractDefinitionFacts(sentences) {
       const answer = cleanText(match[2]);
 
       if (!isUsableLabel(label)) continue;
-      if (!isUsableAnswer(answer, false)) continue;
-
-      // Avoid treating sentence fragments as definitions.
-      if (/^(this|these|those|it|they|there)\b/i.test(label)) {
-        continue;
-      }
+      if (!isUsableAnswer(sentence)) continue;
+      if (/^(this|these|those|it|they|there)\b/i.test(label)) continue;
 
       facts.push({
         label,
@@ -257,6 +229,42 @@ function extractDefinitionFacts(sentences) {
 
   return facts;
 }
+
+// Extract statements with recognisable subject-predicate structures.
+function extractStatementFacts(sentences) {
+  const facts = [];
+
+  const pattern =
+    /^(.{2,90}?)\s+(is defined as|refers to|means|is characterized by|is associated with|is caused by|causes?|leads to|results in|occurs when|is used for|includes|consists of|requires|prevents|reduces|increases|produces|has|have|is|are)\b/i;
+
+  for (const sentence of sentences) {
+    if (sentence.length < 25 || sentence.length > 260) continue;
+
+    const match = sentence.match(pattern);
+
+    if (!match) continue;
+
+    const label = cleanText(match[1]);
+
+    if (!isUsableLabel(label)) continue;
+    if (!isUsableAnswer(sentence)) continue;
+
+    facts.push({
+      label,
+      answer: sentence,
+      type: classifyFact(label, sentence),
+      source: sentence,
+      sourceType: "statement"
+    });
+  }
+
+  return facts;
+}
+
+// Extract lists under headings, for example:
+// Signs and symptoms:
+// - Fever
+// - Headache
 function extractListFacts(notes) {
   const facts = [];
   const lines = String(notes || "").split(/\r?\n/);
@@ -264,6 +272,7 @@ function extractListFacts(notes) {
   let currentHeading = "";
 
   for (const rawLine of lines) {
+    const original = String(rawLine || "").trim();
     const line = cleanText(rawLine);
 
     if (!line) continue;
@@ -275,13 +284,12 @@ function extractListFacts(notes) {
       continue;
     }
 
-    const itemMatch = line.match(/^(?:[-*•]|\d+[.)])\s+(.{3,220})$/);
+    const itemMatch = original.match(/^\s*(?:[-*•●▪◦]|\d+[.)])\s+(.{3,220})$/);
 
     if (!itemMatch || !currentHeading) continue;
 
     const answer = cleanText(itemMatch[1]);
 
-    // Short items are permitted here because they may be terms in a list.
     if (!isUsableAnswer(answer, true)) continue;
 
     facts.push({
@@ -295,74 +303,32 @@ function extractListFacts(notes) {
 
   return facts;
 }
-const STOP_WORDS = new Set([
-  "about", "after", "again", "also", "among", "and", "are",
-  "associated", "because", "before", "being", "between", "body",
-  "can", "cause", "causes", "describes", "during", "each", "from",
-  "have", "into", "includes", "including", "its", "may", "more",
-  "most", "often", "only", "other", "over", "part", "result",
-  "results", "should", "some", "such", "that", "the", "their",
-  "them", "then", "there", "these", "this", "those", "through",
-  "under", "used", "using", "very", "which", "while", "with",
-  "within", "what", "when", "where", "your"
-]);
+
 function uniqueFacts(facts) {
   const result = [];
-  const seenExact = new Set();
-  const seenAnswers = new Set();
-  const seenConcepts = new Set();
+  const seen = new Set();
 
   for (const fact of facts) {
-    const label = normalize(fact.label || "");
-    const answer = normalize(fact.answer || "");
-    const source = normalize(fact.source || "");
+    const label = cleanText(fact.label);
+    const answer = cleanText(fact.answer);
 
-    if (!label || !answer || !isUsableLabel(fact.label)) continue;
+    if (!label || !answer || !isUsableLabel(label)) continue;
 
-    // Remove exact duplicates.
-    const exactKey = `${label}|${answer}`;
+    const key = `${normalize(label)}|${normalize(answer)}`;
 
-    if (seenExact.has(exactKey)) continue;
-    seenExact.add(exactKey);
-
-    // Avoid keeping the same answer extracted from different places.
-    const answerKey = answer
-      .replace(/[^\w\s]/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-
-    if (answerKey && seenAnswers.has(answerKey)) continue;
-
-    // Identify the main content words in the label.
-    const conceptWords = label
-      .split(/\s+/)
-      .filter(word => word.length > 2 && !STOP_WORDS.has(word));
-
-    const conceptKey = conceptWords.join(" ");
-
-    // Avoid duplicate labels when their answers are also identical.
-    if (
-      conceptKey &&
-      seenConcepts.has(`${conceptKey}|${answerKey}`)
-    ) {
-      continue;
-    }
-
-    if (answerKey) seenAnswers.add(answerKey);
-
-    if (conceptKey) {
-      seenConcepts.add(`${conceptKey}|${answerKey}`);
-    }
+    if (seen.has(key)) continue;
+    seen.add(key);
 
     result.push({
       ...fact,
-      label: String(fact.label).trim(),
-      answer: String(fact.answer).trim()
+      label,
+      answer
     });
   }
 
   return result;
 }
+
 function getKeywords(value) {
   return new Set(
     normalize(value)
@@ -388,24 +354,17 @@ function similarityScore(first, second) {
     if (b.has(word)) overlap++;
   }
 
-  // Overlap relative to the smaller keyword set.
   return overlap / Math.min(a.size, b.size);
 }
 
-function hasSharedKeywords(first, second) {
-  const a = getKeywords(first);
-  const b = getKeywords(second);
-
-  for (const word of a) {
-    if (b.has(word)) return true;
-  }
-
-  return false;
-}
-
-function selectDistractors(fact, candidates) {
+function selectDistractors(fact, candidates, researchMode = false) {
   const answerKey = normalize(fact.answer);
-  const labelKey = normalize(fact.label);
+
+  // Web research returns longer sentences than structured study notes.
+  // Use different thresholds while still rejecting duplicate answers.
+  const answerLimit = researchMode ? 0.95 : 0.6;
+  const labelLimit = researchMode ? 0.98 : 0.7;
+  const optionLimit = researchMode ? 0.95 : 0.6;
 
   const ranked = candidates
     .filter(candidate => {
@@ -415,8 +374,7 @@ function selectDistractors(fact, candidates) {
         return false;
       }
 
-      // Reject answers that contain or are contained in
-      // the correct answer.
+      // Never use identical or contained answers as alternatives.
       if (
         candidateKey.includes(answerKey) ||
         answerKey.includes(candidateKey)
@@ -424,35 +382,29 @@ function selectDistractors(fact, candidates) {
         return false;
       }
 
-      // Reject answers that are too similar to the correct answer.
       if (
-        similarityScore(fact.answer, candidate.answer) >= 0.6
+        similarityScore(fact.answer, candidate.answer) >= answerLimit
       ) {
         return false;
       }
 
-      // Reject answers that express almost the same concept.
       if (
-        similarityScore(fact.label, candidate.label) >= 0.7
+        similarityScore(fact.label, candidate.label) >= labelLimit
       ) {
         return false;
       }
 
       return true;
     })
-    .map(candidate => {
-      const sameType = candidate.type === fact.type ? 1 : 0;
-
-      const subjectSimilarity = similarityScore(
-        `${fact.label} ${fact.answer}`,
-        `${candidate.label} ${candidate.answer}`
-      );
-
-      return {
-        candidate,
-        score: sameType * 2 + subjectSimilarity
-      };
-    })
+    .map(candidate => ({
+      candidate,
+      score:
+        (candidate.type === fact.type ? 2 : 0) +
+        similarityScore(
+          `${fact.label} ${fact.answer}`,
+          `${candidate.label} ${candidate.answer}`
+        )
+    }))
     .sort((a, b) => b.score - a.score);
 
   const selected = [];
@@ -462,114 +414,116 @@ function selectDistractors(fact, candidates) {
     const candidate = item.candidate;
     const key = normalize(candidate.answer);
 
-    if (seenAnswers.has(key)) {
-      continue;
-    }
+    if (seenAnswers.has(key)) continue;
 
-    // Avoid selecting distractors that resemble one another.
-    const duplicatesAnotherOption = selected.some(existing =>
-      similarityScore(existing, candidate.answer) >= 0.6
+    const duplicate = selected.some(existing =>
+      similarityScore(existing, candidate.answer) >= optionLimit
     );
 
-    if (duplicatesAnotherOption) {
-      continue;
-    }
+    if (duplicate) continue;
 
     selected.push(candidate.answer);
     seenAnswers.add(key);
 
-    if (selected.length === 3) {
-      break;
-    }
+    if (selected.length === 3) break;
   }
 
   return selected;
 }
+
 function buildQuestionText(fact) {
   const label = cleanText(fact.label).replace(/[.!?]+$/g, "");
+
   switch (fact.type) {
     case "causes":
       return `Which of the following is a cause or risk factor related to ${label}?`;
+
     case "symptoms":
       return `Which of the following is a sign or symptom of ${label}?`;
+
     case "interventions":
       return `Which action is appropriate for the management of ${label}?`;
+
     case "complications":
       return `Which of the following is a complication of ${label}?`;
+
     case "definitions":
       return `Which statement correctly describes ${label}?`;
+
     case "functions":
       return `Which of the following describes a function of ${label}?`;
+
     case "importance":
       return `Why is ${label} important?`;
+
     default:
       return `Which statement best describes ${label}?`;
   }
 }
+
 function shuffle(array) {
   const result = [...array];
 
   for (let i = result.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-
     [result[i], result[j]] = [result[j], result[i]];
   }
 
   return result;
 }
+
 function buildExplanation(fact) {
   const text = `${fact.label} ${fact.answer}`.toLowerCase();
 
   const explanations = [
     {
       pattern: /\b(rubor|redness)\b/,
-      text: "Rubor is redness associated with inflammation. It commonly results from increased blood flow to the affected area."
+      text: "Rubor means redness, one of the classic signs of inflammation. Increased blood flow contributes to this change."
     },
     {
       pattern: /\b(calor|heat)\b/,
-      text: "Calor means heat. In inflammation, increased blood flow to the affected tissue contributes to the rise in temperature."
+      text: "Calor means heat. Increased blood flow to inflamed tissue contributes to the rise in local temperature."
     },
     {
       pattern: /\b(tumor|swelling)\b/,
-      text: "Tumor is the traditional term for swelling among the classic signs of inflammation. Swelling commonly occurs when fluid accumulates in tissues."
+      text: "Tumor is the traditional term for swelling among the classic signs of inflammation. Fluid accumulation in tissues commonly contributes to swelling."
     },
     {
       pattern: /\bdolor\b/,
-      text: "Dolor means pain. Inflammation can cause pain through inflammatory mediators and stimulation of sensory nerve endings."
+      text: "Dolor means pain. Inflammation can stimulate sensory nerve endings through inflammatory mediators and tissue pressure."
     },
     {
       pattern: /\bfunctio laesa\b/,
-      text: "Functio laesa means impaired or lost function. Pain, swelling, and tissue damage can interfere with normal movement or organ function."
+      text: "Functio laesa means impaired or lost function. Pain, swelling and tissue damage can interfere with normal function."
     },
     {
       pattern: /\bchronic inflammation\b/,
-      text: "Chronic inflammation is prolonged inflammation that may persist for weeks, months, or years. Macrophages and lymphocytes commonly participate in this response."
+      text: "Chronic inflammation is prolonged inflammation that may persist for weeks, months or years."
     }
   ];
 
   const match = explanations.find(item => item.pattern.test(text));
 
-  if (match) {
-    return match.text;
+  if (match) return match.text;
+
+  if (fact.source && fact.source !== fact.answer) {
+    return `Source note: ${fact.source}`;
   }
 
-  return fact.source && fact.source !== fact.answer
-    ? `The supplied notes explain this concept as follows: ${fact.source}`
-    : `The supplied notes identify ${fact.label} as an important concept. Review the related definition and supporting facts in your study material.`;
+  return `The source material identifies this as a relevant fact about ${fact.label}. Review the cited material to confirm the context and details.`;
 }
-function makeQuestion(fact, facts) {
+
+function makeQuestion(fact, facts, researchMode = false) {
   const distractors = selectDistractors(
     fact,
-    facts.filter(candidate => candidate !== fact)
+    facts.filter(candidate => candidate !== fact),
+    researchMode
   );
 
-  // Generate a question only when three alternatives are available.
+  // Four options are required: one correct answer and three distractors.
   if (distractors.length !== 3) return null;
 
-  const optionTexts = shuffle([
-    fact.answer,
-    ...distractors
-  ]);
+  const optionTexts = shuffle([fact.answer, ...distractors]);
 
   if (new Set(optionTexts.map(normalize)).size !== 4) {
     return null;
@@ -590,7 +544,7 @@ function makeQuestion(fact, facts) {
     options,
     answer: fact.answer,
     explanation: buildExplanation(fact),
-    source: "provided_notes"
+    source: researchMode ? "web_research" : "provided_notes"
   };
 }
 
@@ -598,7 +552,8 @@ function generateMCQs({
   topic = "General Studies",
   notes = "",
   count = 10,
-  difficulty = "medium"
+  difficulty = "medium",
+  researchMode = false
 } = {}) {
   if (typeof notes !== "string" || !notes.trim()) {
     throw new Error("Study notes are required.");
@@ -613,15 +568,14 @@ function generateMCQs({
   }
 
   const cleanTopic = cleanText(topic) || "General Studies";
-
   const sentences = splitSentences(notes);
 
   const facts = uniqueFacts([
-  ...extractHeadingFacts(notes),
-  ...extractDefinitionFacts(sentences),
-  ...extractListFacts(notes),
-  ...extractStatementFacts(sentences)
-]);
+    ...extractHeadingFacts(notes),
+    ...extractDefinitionFacts(sentences),
+    ...extractListFacts(notes),
+    ...extractStatementFacts(sentences)
+  ]);
 
   const questions = [];
   const seenQuestions = new Set();
@@ -630,11 +584,10 @@ function generateMCQs({
   for (const fact of shuffle(facts)) {
     if (questions.length >= count) break;
 
-    // Allow different facts under the same heading to produce questions.
-const questionKey =
-  `${normalize(fact.label)}|${normalize(fact.answer)}`;
+    const questionKey =
+      `${normalize(fact.label)}|${normalize(fact.answer)}`;
 
-const answerKey = normalize(fact.answer);
+    const answerKey = normalize(fact.answer);
 
     if (
       seenQuestions.has(questionKey) ||
@@ -643,7 +596,7 @@ const answerKey = normalize(fact.answer);
       continue;
     }
 
-    const question = makeQuestion(fact, facts);
+    const question = makeQuestion(fact, facts, researchMode);
 
     if (!question) continue;
 
@@ -659,18 +612,20 @@ const answerKey = normalize(fact.answer);
   }
 
   return {
-    success: true,
-    engine: "devtools-rule-based-mcq-v6.0",
+    success: questions.length > 0,
+    engine: researchMode
+      ? "devtools-rule-based-mcq-v6.1-research"
+      : "devtools-rule-based-mcq-v6.1",
     topic: cleanTopic,
     difficulty,
     requestedCount: count,
     generatedCount: questions.length,
     questions,
     message: questions.length === count
-      ? "Questions generated from supplied notes. Review for accuracy before examination use."
+      ? "Questions generated. Review the source material to confirm accuracy before using them in an examination."
       : questions.length > 0
-        ? `Generated ${questions.length} of ${count} requested questions. More related facts may be needed.`
-        : "No suitable questions could be generated. Provide several related facts or a structured list of study notes."
+        ? `Generated ${questions.length} of ${count} requested questions. More distinct source facts may be needed.`
+        : "No suitable questions could be generated from these facts. Try structured notes or a more specific research topic."
   };
 }
 
