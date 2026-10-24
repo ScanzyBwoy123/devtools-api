@@ -636,18 +636,12 @@ function generateMCQs({
   }
   // Fallback for research articles that do not match
   // the strict study-note extraction patterns.
-  if (researchMode && questions.length === 0) {
-    const fallbackFacts = [];
-    const fallbackSeen = new Set();
-
-    for (const sentence of sentences) {
-      if (
-        sentence.length < 35 ||
-        sentence.length > 240 ||
-        !isUsableAnswer(sentence)
-      ) {
-        continue;
-      }
+  if (
+  isResearchNoise(sentence) ||
+  !isUsableAnswer(sentence)
+) {
+  continue;
+}
 
       const predicate = sentence.match(
         /\b(?:is defined as|refers to|means|is characterized by|is associated with|causes?|leads to|results in|includes|requires|prevents|reduces|increases|produces|has|have|is|are|was|were)\b/i
