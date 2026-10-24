@@ -1,166 +1,140 @@
-// DevTools API — Web Research Service v1.3
-// Searches related topics and retrieves longer source extracts.
-// No paid AI API key required.
+const https = require("https");
 
-"use strict";
+const USER_AGENT = "DevToolsAPI/1.0 (educational research service)";
 
-const WIKIPEDIA_API = "https://en.wikipedia.org/w/api.php";
+function getJSON(url) {
+  return new Promise((resolve, reject) => {
+    https
+      .get(
+        url,
+        {
+          headers: {
+            "User-Agent": USER_AGENT,
+            Accept: "application/json",
+          },
+        },
+        (response) => {
+          let body = "";
 
-function cleanText(value) {
-  return String(value || "")
-    .replace(/<[^>]*>/g, " ")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/\s+/g, " ")
-    .trim();
+          response.setEncoding("utf8");
+
+          response.on("data", (chunk) => {
+            body += chunk;
+          });
+
+          response.on("end", () => {
+            if (
+              response.statusCode < 200 ||
+              response.statusCode >= 300
+            ) {
+              return reject(
+                new Error(`Research provider returned HTTP ${response.statusCode}`)
+              );
+            }
+
+            try {
+              resolve(JSON.parse(body));
+            } catch {
+              reject(new Error("Research provider returned invalid JSON"));
+            }
+          });
+        }
+      )
+      .on("error", reject);
+  });
 }
 
-async function wikipediaRequest(params) {
-  const url = new URL(WIKIPEDIA_API);
+function makeURL(parameters) {
+  const url = new URL("https://en.wikipedia.org/w/api.php");
 
-  for (const [key, value] of Object.entries(params)) {
+  for (const [key, value] of Object.entries(parameters)) {
     url.searchParams.set(key, String(value));
   }
 
-  const response = await fetch(url, {
-    headers: {
-      Accept: "application/json",
-      "User-Agent": "DevToolsAPI-EducationalResearch/1.3"
-    },
-    signal: AbortSignal.timeout(20000)
+  return url.toString();
+}
+
+async function searchArticles(query, limit = 8) {
+  const cleanedQuery = String(query || "").trim();
+
+  if (!cleanedQuery) {
+    throw new Error("A research topic is required.");
+  }
+
+  const url = makeURL({
+    action: "query",
+    list: "search",
+    srsearch: cleanedQuery,
+    srlimit: limit,
+    srnamespace: 0,
+    format: "json",
+    formatversion: 2,
   });
 
-  if (!response.ok) {
-    throw new Error(`Wikipedia returned HTTP ${response.status}.`);
+  const data = await getJSON(url);
+
+  if (!data.query || !Array.isArray(data.query.search)) {
+    throw new Error("Research provider returned an unexpected search response.");
   }
 
-  const data = await response.json();
-
-  if (data.error) {
-    throw new Error(
-      data.error.info || "Wikipedia research request failed."
-    );
-  }
-
-  return data;
+  return data.query.search.map((article) => ({
+    title: article.title,
+    pageId: article.pageid,
+    snippet: String(article.snippet || "").replace(/<[^>]*>/g, ""),
+    url: `https://en.wikipedia.org/?curid=${article.pageid}`,
+  }));
 }
 
-function buildSearchQueries(topic) {
-  const cleanTopic = cleanText(topic);
-
-  const queries = [
-    cleanTopic,
-    `${cleanTopic} treatment`,
-    `${cleanTopic} complications`,
-    `${cleanTopic} procedure`
-  ];
-
-  return [...new Set(queries)].slice(0, 4);
-}
-
-async function searchWebResearch(query, limit = 5) {
-  const normalizedQuery = cleanText(query);
-
-  if (!normalizedQuery) {
-    throw new Error("Enter a topic to search.");
+async function getArticleExtracts(articles) {
+  if (!articles.length) {
+    return [];
   }
 
-  const safeLimit = Math.min(
-    Math.max(Number(limit) || 5, 1),
-    10
-  );
-
-  const queries = buildSearchQueries(normalizedQuery);
-
-  // Search several related phrases instead of relying on one exact query.
-  const searchResponses = await Promise.allSettled(
-    queries.map(searchQuery =>
-      wikipediaRequest({
-        action: "query",
-        list: "search",
-        srsearch: searchQuery,
-        srlimit: safeLimit,
-        srnamespace: 0,
-        format: "json",
-        formatversion: 2
-      })
-    )
-  );
-
-  const matches = [];
-  const seenPageIds = new Set();
-
-  for (const response of searchResponses) {
-    if (response.status !== "fulfilled") continue;
-
-    const items = response.value?.query?.search || [];
-
-    for (const item of items) {
-      if (!Number.isInteger(item.pageid)) continue;
-      if (seenPageIds.has(item.pageid)) continue;
-
-      seenPageIds.add(item.pageid);
-      matches.push(item);
-
-      if (matches.length >= safeLimit) break;
-    }
-
-    if (matches.length >= safeLimit) break;
-  }
-
-  if (matches.length === 0) {
-    return {
-      query: normalizedQuery,
-      results: []
-    };
-  }
-
-  const pageIds = matches
-    .map(item => item.pageid)
-    .join("|");
-
-  // Retrieve longer extracts to give the MCQ engine more facts to analyse.
-  const detailData = await wikipediaRequest({
+  const url = makeURL({
     action: "query",
+    pageids: articles.map((article) => article.pageId).join("|"),
     prop: "extracts",
-    pageids: pageIds,
     explaintext: 1,
     exchars: 1200,
     format: "json",
-    formatversion: 2
+    formatversion: 2,
   });
 
-  const pages = detailData?.query?.pages || [];
+  const data = await getJSON(url);
+  const pages = data.query && data.query.pages;
+
+  if (!Array.isArray(pages)) {
+    throw new Error("Research provider returned no article details.");
+  }
 
   const pageMap = new Map(
-    pages.map(page => [page.pageid, page])
+    pages.map((page) => [page.pageid, page])
   );
 
-  const results = matches
-    .map(match => {
-      const page = pageMap.get(match.pageid) || {};
+  return articles
+    .map((article) => {
+      const page = pageMap.get(article.pageId);
 
       return {
-        title: cleanText(match.title),
-        snippet: cleanText(match.snippet),
-        extract: cleanText(page.extract),
-        source: "Wikipedia",
-        url:
-          "https://en.wikipedia.org/?curid=" +
-          encodeURIComponent(match.pageid)
+        ...article,
+        extract: page && page.extract ? page.extract : article.snippet,
       };
     })
-    .filter(item => item.extract.length >= 100);
+    .filter((article) => article.extract);
+}
 
-  return {
-    query: normalizedQuery,
-    results
-  };
+async function searchResearch(query, limit = 8) {
+  const articles = await searchArticles(query, limit);
+
+  if (articles.length === 0) {
+    return [];
+  }
+
+  return getArticleExtracts(articles);
 }
 
 module.exports = {
-  searchWebResearch
+  searchResearch,
+  searchArticles,
+  getArticleExtracts,
 };
