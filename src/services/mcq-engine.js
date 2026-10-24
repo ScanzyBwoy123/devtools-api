@@ -17,23 +17,41 @@ function normalize(value) {
 }
 function isUsable(value, min = 8, max = 260) {
   const text = cleanText(value);
-  if (text.length < min || text.length > max) return false;
-  if (
-    /^(and|or|but|the|a|an|of|to|in|for|because|however|which|when|if)\b/i.test(text)
-  ) {
+
+  if (text.length < min || text.length > max) {
     return false;
   }
+
+  // Reject headings, page labels, and document metadata.
   if (
     /^(chapter|unit|contents|references|bibliography|page\s+\d+|table of contents)\b/i.test(text)
   ) {
     return false;
   }
-  // Reject headings that are probably incomplete sentence fragments.
+
+  // Reject vague or incomplete labels.
   if (
-    /\b(the|a|an|of|to|for|with|from|and|or|as|is|are|was|were|that|which|into|by|on|at)$/i.test(text)
+    /^(it|this|that|these|those|they|he|she|we|you|there|here|which|what|who|where|when|how|as|because|however|and|or|but)\b/i.test(text)
   ) {
     return false;
   }
+
+  // Reject incomplete phrases ending in connecting words.
+  if (
+    /\b(the|a|an|of|to|for|with|from|and|or|as|is|are|was|were|that|which|into|by|on|at|if|when|because)$/i.test(text)
+  ) {
+    return false;
+  }
+
+  // Reject standalone headings that are not meaningful answer statements.
+  if (
+    /^[A-Z0-9\s()/-]{2,45}$/.test(text) &&
+    !/[.!?:]/.test(text) &&
+    text.split(/\s+/).length <= 5
+  ) {
+    return false;
+  }
+
   return /[a-z]/i.test(text);
 }
 function splitSentences(notes) {
