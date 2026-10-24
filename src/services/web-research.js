@@ -1,5 +1,5 @@
-// DevTools API — Web Research Service v1.2
-// Retrieves more source text for research-based MCQ generation.
+// DevTools API — Web Research Service v1.3
+// Searches related topics and retrieves longer source extracts.
 // No paid AI API key required.
 
 "use strict";
@@ -28,15 +28,13 @@ async function wikipediaRequest(params) {
   const response = await fetch(url, {
     headers: {
       Accept: "application/json",
-      "User-Agent": "DevToolsAPI-EducationalResearch/1.2"
+      "User-Agent": "DevToolsAPI-EducationalResearch/1.3"
     },
-    signal: AbortSignal.timeout(15000)
+    signal: AbortSignal.timeout(20000)
   });
 
   if (!response.ok) {
-    throw new Error(
-      `Wikipedia returned HTTP ${response.status}.`
-    );
+    throw new Error(`Wikipedia returned HTTP ${response.status}.`);
   }
 
   const data = await response.json();
@@ -50,6 +48,19 @@ async function wikipediaRequest(params) {
   return data;
 }
 
+function buildSearchQueries(topic) {
+  const cleanTopic = cleanText(topic);
+
+  const queries = [
+    cleanTopic,
+    `${cleanTopic} treatment`,
+    `${cleanTopic} complications`,
+    `${cleanTopic} procedure`
+  ];
+
+  return [...new Set(queries)].slice(0, 4);
+}
+
 async function searchWebResearch(query, limit = 5) {
   const normalizedQuery = cleanText(query);
 
@@ -59,21 +70,46 @@ async function searchWebResearch(query, limit = 5) {
 
   const safeLimit = Math.min(
     Math.max(Number(limit) || 5, 1),
-    5
+    10
   );
 
-  // Search for articles relevant to the requested topic.
-  const searchData = await wikipediaRequest({
-    action: "query",
-    list: "search",
-    srsearch: normalizedQuery,
-    srlimit: safeLimit,
-    srnamespace: 0,
-    format: "json",
-    formatversion: 2
-  });
+  const queries = buildSearchQueries(normalizedQuery);
 
-  const matches = searchData?.query?.search || [];
+  // Search several related phrases instead of relying on one exact query.
+  const searchResponses = await Promise.allSettled(
+    queries.map(searchQuery =>
+      wikipediaRequest({
+        action: "query",
+        list: "search",
+        srsearch: searchQuery,
+        srlimit: safeLimit,
+        srnamespace: 0,
+        format: "json",
+        formatversion: 2
+      })
+    )
+  );
+
+  const matches = [];
+  const seenPageIds = new Set();
+
+  for (const response of searchResponses) {
+    if (response.status !== "fulfilled") continue;
+
+    const items = response.value?.query?.search || [];
+
+    for (const item of items) {
+      if (!Number.isInteger(item.pageid)) continue;
+      if (seenPageIds.has(item.pageid)) continue;
+
+      seenPageIds.add(item.pageid);
+      matches.push(item);
+
+      if (matches.length >= safeLimit) break;
+    }
+
+    if (matches.length >= safeLimit) break;
+  }
 
   if (matches.length === 0) {
     return {
@@ -84,24 +120,15 @@ async function searchWebResearch(query, limit = 5) {
 
   const pageIds = matches
     .map(item => item.pageid)
-    .filter(Number.isInteger)
     .join("|");
 
-  if (!pageIds) {
-    return {
-      query: normalizedQuery,
-      results: []
-    };
-  }
-
-  // Retrieve article text instead of limiting results
-  // to the introduction alone.
+  // Retrieve longer extracts to give the MCQ engine more facts to analyse.
   const detailData = await wikipediaRequest({
     action: "query",
     prop: "extracts",
     pageids: pageIds,
     explaintext: 1,
-    exsentences: 10,
+    exchars: 10000,
     format: "json",
     formatversion: 2
   });
