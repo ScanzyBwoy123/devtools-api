@@ -215,7 +215,9 @@ function extractDefinitionFacts(sentences) {
     /^(.{2,70}?)\s+is\s+(?:a|an|the)\s+(.{8,220})$/i
   ];
 
-  for (const sentence of sentences) {
+  for (const rawSentence of sentences) {
+    const sentence = cleanText(rawSentence);
+
     for (const pattern of patterns) {
       const match = sentence.match(pattern);
 
@@ -227,9 +229,14 @@ function extractDefinitionFacts(sentences) {
       if (!isUsableLabel(label)) continue;
       if (!isUsableAnswer(answer, false)) continue;
 
+      // Avoid treating sentence fragments as definitions.
+      if (/^(this|these|those|it|they|there)\b/i.test(label)) {
+        continue;
+      }
+
       facts.push({
         label,
-        answer,
+        answer: sentence,
         type: "definitions",
         source: sentence,
         sourceType: "definition"
@@ -241,7 +248,6 @@ function extractDefinitionFacts(sentences) {
 
   return facts;
 }
-
 function extractListFacts(notes) {
   const facts = [];
   const lines = String(notes || "").split(/\r?\n/);
