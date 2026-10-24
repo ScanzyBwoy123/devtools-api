@@ -4,7 +4,9 @@
 
 function cleanText(value) {
   return String(value || "")
-   .replace(/[*_`]/g, "")
+    .replace(/\u00a0/g, " ")
+    .replace(/[*_`]/g, "")
+    .replace(/^\s*(?:[-*•]|\d+[.)])\s+/, "")
     .replace(/[ \t]+/g, " ")
     .replace(/\s+/g, " ")
     .trim()
