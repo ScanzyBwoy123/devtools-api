@@ -84,8 +84,9 @@ function isUsableAnswer(value, allowShort = false) {
 
 function isUsableLabel(value) {
   const text = cleanText(value);
+  const words = text.split(/\s+/);
 
-  if (text.length < 3 || text.length > 90) {
+  if (text.length < 3 || text.length > 90 || words.length > 8) {
     return false;
   }
 
@@ -95,6 +96,14 @@ function isUsableLabel(value) {
 
   if (
     /^(here is|the following text|answer|answers|question|questions|notes)$/i.test(text)
+  ) {
+    return false;
+  }
+
+  // Reject unfinished sentences being used as concept labels.
+  if (
+    /\b(depends|can|could|should|would|may|might|must|will|was|were|are|is|means|causes?|results?|leads|increases|decreases|requires|includes|produces)\b/i.test(text) ||
+    /\b(the|a|an|of|to|for|with|from|on|in|by|and|or|because|when|that|which)$/i.test(text)
   ) {
     return false;
   }
@@ -308,7 +317,7 @@ function uniqueFacts(facts) {
     const answer = normalize(fact.answer || "");
     const source = normalize(fact.source || "");
 
-    if (!label || !answer) continue;
+    if (!label || !answer || !isUsableLabel(fact.label)) continue;
 
     // Remove exact duplicates.
     const exactKey = `${label}|${answer}`;
