@@ -286,7 +286,17 @@ function extractListFacts(notes) {
 
   return facts;
 }
-
+const STOP_WORDS = new Set([
+  "about", "after", "again", "also", "among", "and", "are",
+  "associated", "because", "before", "being", "between", "body",
+  "can", "cause", "causes", "describes", "during", "each", "from",
+  "have", "into", "includes", "including", "its", "may", "more",
+  "most", "often", "only", "other", "over", "part", "result",
+  "results", "should", "some", "such", "that", "the", "their",
+  "them", "then", "there", "these", "this", "those", "through",
+  "under", "used", "using", "very", "which", "while", "with",
+  "within", "what", "when", "where", "your"
+]);
 function uniqueFacts(facts) {
   const result = [];
   const seenExact = new Set();
