@@ -161,6 +161,47 @@ function extractHeadingFacts(notes) {
 
   return facts;
 }
+// Extract useful factual statements from ordinary paragraphs.
+function extractStatementFacts(sentences) {
+  const facts = [];
+
+  const pattern =
+    /^(.{2,90}?)\s+(is defined as|refers to|means|is characterized by|is associated with|is caused by|causes?|leads to|results in|occurs when|is used for|includes|consists of|requires|prevents|reduces|increases|produces|has|have|is|are)\b/i;
+
+  for (const sentence of sentences) {
+    const text = cleanText(sentence);
+
+    if (text.length < 25 || text.length > 260) {
+      continue;
+    }
+
+    const match = text.match(pattern);
+
+    if (!match) {
+      continue;
+    }
+
+    const label = cleanText(match[1]);
+
+    if (!isUsableLabel(label)) {
+      continue;
+    }
+
+    if (!isUsableAnswer(text, false)) {
+      continue;
+    }
+
+    facts.push({
+      label,
+      answer: text,
+      type: classifyFact(label, text),
+      source: text,
+      sourceType: "statement"
+    });
+  }
+
+  return facts;
+}
 
 function extractDefinitionFacts(sentences) {
   const facts = [];
@@ -489,10 +530,11 @@ function generateMCQs({
   const sentences = splitSentences(notes);
 
   const facts = uniqueFacts([
-    ...extractHeadingFacts(notes),
-    ...extractDefinitionFacts(sentences),
-    ...extractListFacts(notes)
-  ]);
+  ...extractHeadingFacts(notes),
+  ...extractDefinitionFacts(sentences),
+  ...extractListFacts(notes),
+  ...extractStatementFacts(sentences)
+]);
 
   const questions = [];
   const seenQuestions = new Set();
