@@ -132,8 +132,17 @@ async function searchResearch(query, limit = 8) {
 
   return getArticleExtracts(articles);
 }
+async function searchWebResearch(query, limit = 5) {
+  const results = await searchResearch(query, limit);
+
+  return {
+    query,
+    results,
+  };
+}
 
 module.exports = {
+  searchWebResearch,
   searchResearch,
   searchArticles,
   getArticleExtracts,
