@@ -385,9 +385,9 @@ function similarityScore(first, second) {
 function selectDistractors(fact, candidates, researchMode = false) {
   const answerKey = normalize(fact.answer);
 
-  const answerLimit = researchMode ? 0.82 : 0.6;
-const labelLimit = researchMode ? 0.82 : 0.7;
-const optionLimit = researchMode ? 0.78 : 0.6;
+  const answerLimit = researchMode ? 0.92 : 0.6;
+  const labelLimit = researchMode ? 1.01 : 0.7;
+  const optionLimit = researchMode ? 0.90 : 0.6;
   const ranked = candidates
     .filter(candidate => {
       const candidateKey = normalize(candidate.answer);
