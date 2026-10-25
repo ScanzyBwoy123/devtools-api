@@ -95,7 +95,7 @@ async function getArticleExtracts(articles) {
     pageids: articles.map((article) => article.pageId).join("|"),
     prop: "extracts",
     explaintext: 1,
-    exchars: 1200,
+    exchars: 5000,
     format: "json",
     formatversion: 2,
   });
