@@ -124,13 +124,86 @@ async function getArticleExtracts(articles) {
 }
 
 async function searchResearch(query, limit = 8) {
-  const articles = await searchArticles(query, limit);
+  const cleanedQuery = String(query || "").trim();
 
-  if (articles.length === 0) {
+  if (!cleanedQuery) {
+    throw new Error("A research topic is required.");
+  }
+
+  const simplified = cleanedQuery
+    .replace(/\b(nursing care|patient care|management|overview)\b/ig, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const variants = [
+    cleanedQuery,
+    simplified,
+    `${simplified} complications`,
+    `${simplified} treatment`,
+    `${simplified} clinical care`
+  ];
+
+  const articlesById = new Map();
+
+  for (const searchTerm of [...new Set(variants)].filter(Boolean)) {
+    const articles = await searchArticles(searchTerm, 8);
+
+    for (const article of articles) {
+      if (!articlesById.has(article.pageId)) {
+        articlesById.set(article.pageId, article);
+      }
+    }
+  }
+
+  const articles = [...articlesById.values()];
+
+  if (!articles.length) {
     return [];
   }
 
-  return getArticleExtracts(articles);
+  const extracted = await getArticleExtracts(articles);
+
+  const terms = simplified
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(term =>
+      term.length >= 4 &&
+      !["about", "with", "from", "into"].includes(term)
+    );
+
+  function relevance(article) {
+    const title = String(article.title || "").toLowerCase();
+    const body = String(article.extract || "").toLowerCase();
+    let score = 0;
+
+    for (const term of terms) {
+      if (
+        term.startsWith("tracheostom") ||
+        term.startsWith("tracheotom")
+      ) {
+        if (/tracheostom|tracheotom/.test(title)) {
+          score += 5;
+        } else if (/tracheostom|tracheotom/.test(body)) {
+          score += 2;
+        }
+      } else {
+        if (title.includes(term)) score += 3;
+        else if (body.includes(term)) score += 1;
+      }
+    }
+
+    return score;
+  }
+
+  return extracted
+    .map(article => ({
+      ...article,
+      relevance: relevance(article)
+    }))
+    .filter(article => article.relevance > 0)
+    .sort((a, b) => b.relevance - a.relevance)
+    .slice(0, limit)
+    .map(({ relevance, ...article }) => article);
 }
 async function searchWebResearch(query, limit = 5) {
   const results = await searchResearch(query, limit);
