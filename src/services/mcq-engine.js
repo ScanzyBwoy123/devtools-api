@@ -687,9 +687,10 @@ const answerKey = normalize(fact.answer);
 if (seenAnswers.has(answerKey)) continue;
 
 // Use all extracted facts as possible distractors.
+// Use all extracted facts as possible distractors.
 const candidatePool = uniqueFacts([
-…facts,
-…fallbackFacts
+  ...facts,
+  ...fallbackFacts
 ]);
 
 const question = makeQuestion(
