@@ -41,7 +41,53 @@ function normalize(value) {
     .replace(/[.!?]+$/g, "")
     .replace(/\s+/g, " ");
 }
+function classifyFact(label, answer) {
+  const text = `${label} ${answer}`.toLowerCase();
 
+  if (
+    /\b(complication|complications|adverse effect|side effect)\b/.test(text)
+  ) {
+    return "complications";
+  }
+
+  if (
+    /\b(signs and symptoms|symptoms|clinical manifestations|presents with)\b/.test(text)
+  ) {
+    return "symptoms";
+  }
+
+  if (
+    /\b(nursing intervention|nursing management|nursing care|treatment|management|care includes|should be done)\b/.test(text)
+  ) {
+    return "interventions";
+  }
+
+  if (
+    /\b(cause|causes|risk factor|risk factors|etiology|aetiology)\b/.test(text)
+  ) {
+    return "causes";
+  }
+
+  if (
+    /\b(function|functions|role|roles|purpose|purposes)\b/.test(text)
+  ) {
+    return "functions";
+  }
+
+  if (
+    /\b(importance|benefit|benefits|significance)\b/.test(text)
+  ) {
+    return "importance";
+  }
+
+  if (
+    /\b(is defined as|refers to|means|definition)\b/.test(text)
+  ) {
+    return "definitions";
+  }
+
+  return "statements";
+}
 function splitSentences(notes) {
   return String(notes || "")
     .replace(/\r/g, "\n")
