@@ -636,6 +636,7 @@ function generateMCQs({
   }
   // Fallback for research articles that do not match
   // the strict study-note extraction patterns.
+  for (const sentence of sentences) {
   if (
   isResearchNoise(sentence) ||
   !isUsableAnswer(sentence)
