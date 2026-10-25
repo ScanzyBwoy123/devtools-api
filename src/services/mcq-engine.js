@@ -680,14 +680,23 @@ for (const sentence of sentences) {
   });
 }
 for (const fact of shuffle(fallbackFacts)) {
-  if (questions.length >= count) break;
-  const answerKey = normalize(fact.answer);
-  if (seenAnswers.has(answerKey)) continue;
-  const question = makeQuestion(
-    fact,
-    fallbackFacts,
-    true
-  );
+if (questions.length >= count) break;
+
+const answerKey = normalize(fact.answer);
+
+if (seenAnswers.has(answerKey)) continue;
+
+// Use all extracted facts as possible distractors.
+const candidatePool = uniqueFacts([
+…facts,
+…fallbackFacts
+]);
+
+const question = makeQuestion(
+fact,
+candidatePool,
+true
+);
   if (!question) continue;
   const questionKey =
     `${normalize(fact.label)}|${answerKey}`;
