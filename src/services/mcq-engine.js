@@ -167,7 +167,7 @@ function isUsableAnswer(value, allowShort = false) {
 
 function isUsableLabel(value) {
   const text = cleanText(value);
-  const words = text.split(/\s+/);
+  const words = text.split(/\s+/).filter(Boolean);
 
   if (text.length < 3 || text.length > 90 || words.length > 8) {
     return false;
@@ -183,9 +183,23 @@ function isUsableLabel(value) {
     return false;
   }
 
+  // Reject labels that are actually incomplete sentences.
   if (
-    /\b(depends|can|could|should|would|may|might|must|will|was|were|are|is|means|causes?|results?|leads|increases|decreases|requires|includes|produces)\b/i.test(text) ||
-    /\b(the|a|an|of|to|for|with|from|on|in|by|and|or|because|when|that|which)$/i.test(text)
+    /\b(depends|can|could|should|would|may|might|must|will|was|were|are|is|means|causes?|results?|leads|increases|decreases|requires|includes|produces)\b/i.test(text)
+  ) {
+    return false;
+  }
+
+  // Reject labels that end with an incomplete connecting word.
+  if (
+    /\b(?:the|a|an|of|to|for|with|from|on|in|by|and|or|because|when|where|which|that|but|suddenly|never|always|only|more|so|doing|patient)\s*$/i.test(text)
+  ) {
+    return false;
+  }
+
+  // Reject labels that look like instructions or sentence fragments.
+  if (
+    /^(?:by|so|then|therefore|however|because|in order to|due to|as a result)\b/i.test(text)
   ) {
     return false;
   }
