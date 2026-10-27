@@ -104,14 +104,31 @@ function splitSentences(notes) {
 
 function isBadHeading(value) {
   const text = normalize(value);
+  const words = text.split(/\s+/).filter(Boolean);
 
-  return (
+  if (!text || words.length < 2) {
+    return true;
+  }
+
+  if (
     /^(chapter|unit|contents|references|bibliography|appendix|table of contents)\b/i.test(text) ||
     /^page\s+\d+/i.test(text) ||
-    /^(introduction|conclusion|objectives|acknowledgements)$/i.test(text) ||
-    text.split(/\s+/).length > 8 ||
-    /\b(?:where|when|which|that|with|from|into|because|and|or|but|of|for|to|in|on|at|by|the|a|an)$/i.test(text)
-  );
+    /^(introduction|conclusion|objectives|acknowledgements)$/i.test(text)
+  ) {
+    return true;
+  }
+
+  if (words.length > 8) {
+    return true;
+  }
+
+  if (
+    /\b(?:never|always|the|a|an|and|or|but|of|for|to|in|on|at|by|with|from|into|where|when|which|that|because|suddenly|patient|only)$/i.test(text)
+  ) {
+    return true;
+  }
+
+  return false;
 }
 function isUsableAnswer(value, allowShort = false) {
   const text = cleanText(value);
